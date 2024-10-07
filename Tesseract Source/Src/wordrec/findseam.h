@@ -1,14 +1,9 @@
 /* -*-C-*-
  ********************************************************************************
  *
- * File:        findseam.h  (Formerly findseam.h)
+ * File:        findseam.h
  * Description:
  * Author:       Mark Seaman, SW Productivity
- * Created:      Fri Oct 16 14:37:00 1987
- * Modified:     Thu May 16 17:05:17 1991 (Mark Seaman) marks@hpgrlt
- * Language:     C
- * Package:      N/A
- * Status:       Reusable Software Component
  *
  * (c) Copyright 1987, Hewlett-Packard Company.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,10 +25,15 @@
               I n c l u d e s
 ----------------------------------------------------------------------*/
 #include "seam.h"
-#include "oldheap.h"
+#include "genericheap.h"
+#include "kdpair.h"
 #include "chop.h"
 
-typedef HEAP *SEAM_QUEUE;
-typedef ARRAY SEAM_PILE;
+// The SeamPair elements own their SEAMs and delete them upon destruction.
+using SeamPair = tesseract::KDPtrPairInc<float, SEAM>;
+using SeamQueue = tesseract::GenericHeap<SeamPair>;
+
+using SeamDecPair = tesseract::KDPtrPairDec<float, SEAM>;
+using SeamPile = tesseract::GenericHeap<SeamDecPair>;
 
 #endif

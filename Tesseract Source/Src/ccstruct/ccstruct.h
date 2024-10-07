@@ -16,17 +16,16 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_CCSTRUCT_CCSTRUCT_H__
-#define TESSERACT_CCSTRUCT_CCSTRUCT_H__
+#ifndef TESSERACT_CCSTRUCT_CCSTRUCT_H_
+#define TESSERACT_CCSTRUCT_CCSTRUCT_H_
 
-#include "cutil.h"
-#include "image.h"
+#include "cutil_class.h"  // for CUtil
 
 namespace tesseract {
 class CCStruct : public CUtil {
  public:
-  CCStruct();
-  ~CCStruct();
+  CCStruct() = default;
+  ~CCStruct() override;
 
   // Globally accessible constants.
   // APPROXIMATIONS of the fractions of the character cell taken by
@@ -36,13 +35,7 @@ class CCStruct : public CUtil {
   static const double kAscenderFraction;   // = 0.25;
   // Derived value giving the x-height as a fraction of cap-height.
   static const double kXHeightCapRatio;    // = XHeight/(XHeight + Ascender).
-
- protected:
-  Image image_;
 };
-
-class Tesseract;
 }  // namespace tesseract
 
-
-#endif  // TESSERACT_CCSTRUCT_CCSTRUCT_H__
+#endif  // TESSERACT_CCSTRUCT_CCSTRUCT_H_

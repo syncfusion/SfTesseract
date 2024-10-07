@@ -1,10 +1,9 @@
 /******************************************************************************
- **	Filename:    cutoffs.c
- **	Purpose:     Routines to manipulate an array of class cutoffs.
- **	Author:      Dan Johnson
- **	History:     Wed Feb 20 09:28:51 1991, DSJ, Created.
+ ** Filename:    cutoffs.c
+ ** Purpose:     Routines to manipulate an array of class cutoffs.
+ ** Author:      Dan Johnson
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,69 +14,59 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
           Include Files and Type Defines
-----------------------------------------------------------------------------**/
-#include "cutoffs.h"
+----------------------------------------------------------------------------*/
 
-#include <stdio.h>
+#include <cstdio>
+#include <sstream>    // for std::istringstream
+#include <string>     // for std::string
 
 #include "classify.h"
-#include "efio.h"
-#include "globals.h"
 #include "helpers.h"
-#include "scanutils.h"
 #include "serialis.h"
 #include "unichar.h"
 
-#define REALLY_QUOTE_IT(x) QUOTE_IT(x)
-
 #define MAX_CUTOFF      1000
 
-/**----------------------------------------------------------------------------
-              Public Code
-----------------------------------------------------------------------------**/
-/*---------------------------------------------------------------------------*/
 namespace tesseract {
-void Classify::ReadNewCutoffs(FILE *CutoffFile, bool swap, inT64 end_offset,
-                              CLASS_CUTOFF_ARRAY Cutoffs) {
-/*
- **	Parameters:
- **		Filename	name of file containing cutoff definitions
- **		Cutoffs		array to put cutoffs into
- **	Globals: none
- **	Operation: Open Filename, read in all of the class-id/cutoff pairs
- **		and insert them into the Cutoffs array.  Cutoffs are
- **		indexed in the array by class id.  Unused entries in the
- **		array are set to an arbitrarily high cutoff value.
- **	Return: none
- **	Exceptions: none
- **	History: Wed Feb 20 09:38:26 1991, DSJ, Created.
+/**
+ * Open file, read in all of the class-id/cutoff pairs
+ * and insert them into the Cutoffs array.  Cutoffs are
+ * indexed in the array by class id.  Unused entries in the
+ * array are set to an arbitrarily high cutoff value.
+ * @param fp file containing cutoff definitions
+ * @param Cutoffs array to put cutoffs into
  */
-  char Class[UNICHAR_LEN + 1];
-  CLASS_ID ClassId;
+void Classify::ReadNewCutoffs(TFile* fp, uint16_t* Cutoffs) {
   int Cutoff;
-  int i;
 
-  if (shape_table_ != NULL) {
-    if (!shapetable_cutoffs_.DeSerialize(swap, CutoffFile)) {
+  if (shape_table_ != nullptr) {
+    if (!shapetable_cutoffs_.DeSerialize(fp)) {
       tprintf("Error during read of shapetable pffmtable!\n");
     }
   }
-  for (i = 0; i < MAX_NUM_CLASSES; i++)
+  for (int i = 0; i < MAX_NUM_CLASSES; i++)
     Cutoffs[i] = MAX_CUTOFF;
 
-  while ((end_offset < 0 || ftell(CutoffFile) < end_offset) &&
-         fscanf(CutoffFile, "%" REALLY_QUOTE_IT(UNICHAR_LEN) "s %d",
-                Class, &Cutoff) == 2) {
-    if (strcmp(Class, "NULL") == 0) {
+  const int kMaxLineSize = 100;
+  char line[kMaxLineSize];
+  while (fp->FGets(line, kMaxLineSize) != nullptr) {
+    std::string Class;
+    CLASS_ID ClassId;
+    std::istringstream stream(line);
+    stream >> Class >> Cutoff;
+    if (stream.fail()) {
+      break;
+    }
+    if (Class.compare("NULL") == 0) {
       ClassId = unicharset.unichar_to_id(" ");
     } else {
-      ClassId = unicharset.unichar_to_id(Class);
+      ClassId = unicharset.unichar_to_id(Class.c_str());
     }
+    ASSERT_HOST(ClassId >= 0 && ClassId < MAX_NUM_CLASSES);
     Cutoffs[ClassId] = Cutoff;
-    SkipNewline(CutoffFile);
   }
-}                                /* ReadNewCutoffs */
+}
 
 }  // namespace tesseract

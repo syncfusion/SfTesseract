@@ -1,14 +1,9 @@
 /* -*-C-*-
  ********************************************************************************
  *
- * File:        render.c  (Formerly render.c)
+ * File:         render.cpp  (Formerly render.c)
  * Description:  Convert the various data type into line lists
  * Author:       Mark Seaman, OCR Technology
- * Created:      Fri Jul 28 13:14:48 1989
- * Modified:     Mon Jul 15 10:23:37 1991 (Mark Seaman) marks@hpgrlt
- * Language:     C
- * Package:      N/A
- * Status:       Experimental (Do Not Distribute)
  *
  * (c) Copyright 1989, Hewlett-Packard Company.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,12 +20,7 @@
 #include "render.h"
 #include "blobs.h"
 
-#ifdef __UNIX__
-#include <assert.h>
-#endif
-#include <math.h>
-
-#include "vecfuncs.h"
+#include <cmath>
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
@@ -40,15 +30,13 @@
 /*----------------------------------------------------------------------
               V a r i a b l e s
 ----------------------------------------------------------------------*/
-ScrollView *blob_window = NULL;
+ScrollView *blob_window = nullptr;
 
 C_COL color_list[] = {
   Red, Cyan, Yellow, Blue, Green, White
 };
 
 BOOL_VAR(wordrec_display_all_blobs, 0, "Display Blobs");
-
-BOOL_VAR(wordrec_display_all_words, 0, "Display Words");
 
 BOOL_VAR(wordrec_blob_pause, 0, "Blob pause");
 
@@ -63,7 +51,7 @@ BOOL_VAR(wordrec_blob_pause, 0, "Blob pause");
  **********************************************************************/
 void display_blob(TBLOB *blob, C_COL color) {
   /* Size of drawable */
-  if (blob_window == NULL) {
+  if (blob_window == nullptr) {
     blob_window = c_create_window ("Blobs", 520, 10,
       500, 256, -1000.0, 1000.0, 0.0, 256.0);
   }
@@ -96,12 +84,12 @@ void render_blob(void *window, TBLOB *blob, C_COL color) {
  * that was supplied as input.
  **********************************************************************/
 void render_edgepts(void *window, EDGEPT *edgept, C_COL color) {
+  if (!edgept)
+    return;
+
   float x = edgept->pos.x;
   float y = edgept->pos.y;
   EDGEPT *this_edge = edgept;
-
-  if (!edgept)
-    return;
 
   c_line_color_index(window, color);
   c_move(window, x, y);

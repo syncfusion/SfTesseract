@@ -17,8 +17,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_TABLEFIND_H__
-#define TESSERACT_TEXTORD_TABLEFIND_H__
+#ifndef TESSERACT_TEXTORD_TABLEFIND_H_
+#define TESSERACT_TEXTORD_TABLEFIND_H_
 
 #include "colpartitiongrid.h"
 #include "elst.h"
@@ -46,7 +46,7 @@ CLISTIZEH(ColSegment)
 class ColSegment : public ELIST_LINK {
  public:
   ColSegment();
-  ~ColSegment();
+  ~ColSegment() = default;
 
   // Simple accessors and mutators
   const TBOX& bounding_box() const {
@@ -113,12 +113,12 @@ class ColSegment : public ELIST_LINK {
 };
 
 // Typedef BBGrid of ColSegments
-typedef BBGrid<ColSegment,
+using ColSegmentGrid = BBGrid<ColSegment,
                ColSegment_CLIST,
-               ColSegment_C_IT> ColSegmentGrid;
-typedef GridSearch<ColSegment,
+               ColSegment_C_IT>;
+using ColSegmentGridSearch = GridSearch<ColSegment,
                    ColSegment_CLIST,
-                   ColSegment_C_IT> ColSegmentGridSearch;
+                   ColSegment_C_IT>;
 
 // TableFinder is a utility class to find a set of tables given a set of
 // ColPartitions and Columns. The TableFinder will mark candidate ColPartitions
@@ -389,11 +389,6 @@ class TableFinder {
   void DisplayColSegmentGrid(ScrollView* win, ColSegmentGrid* grid,
                              ScrollView::Color color);
 
-  // Write ColParitions and Tables to a PIX image
-  // Note: This method is only for debug purpose during development and
-  // would not be part of checked in code
-  void WriteToPix(const FCOORD& reskew);
-
   // Merge all colpartitions in table regions to make them a single
   // colpartition and revert types of isolated table cells not
   // assigned to any table to their original types.
@@ -432,4 +427,4 @@ class TableFinder {
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_TEXTORD_TABLEFIND_H__
+#endif  // TESSERACT_TEXTORD_TABLEFIND_H_

@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        edgblob.h  (Formerly edgeloop.h)
  * Description: Functions to clean up an outline before approximation.
- * Author:		Ray Smith
- * Created:		Tue Mar 26 16:56:25 GMT 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,11 +21,11 @@
 
 #include          "scrollview.h"
 #include          "params.h"
-#include          "img.h"
 #include          "ocrblock.h"
 #include          "coutln.h"
 #include          "crakedge.h"
-#include          "notdll.h"
+
+#include <memory>
 
 #define BUCKETSIZE      16
 
@@ -37,12 +36,11 @@ class OL_BUCKETS
                ICOORD bleft,  //corners
                ICOORD tright);
 
-    ~OL_BUCKETS () {             //cleanup
-      delete[]buckets;
-    }
+    ~OL_BUCKETS () = default;
+
     C_OUTLINE_LIST *operator () (//array access
-      inT16 x,                   //image coords
-      inT16 y);
+      int16_t x,                   //image coords
+      int16_t y);
                                  //first non-empty bucket
     C_OUTLINE_LIST *start_scan() {
       for (index = 0; buckets[index].empty () && index < bxdim * bydim - 1;
@@ -54,24 +52,24 @@ class OL_BUCKETS
       for (; buckets[index].empty () && index < bxdim * bydim - 1; index++);
       return &buckets[index];
     }
-    inT32 count_children(                     //recursive sum
+    int32_t count_children(                     //recursive sum
                          C_OUTLINE *outline,  //parent outline
-                         inT32 max_count);    // max output
-    inT32 outline_complexity(                 // new version of count_children
+                         int32_t max_count);    // max output
+    int32_t outline_complexity(                 // new version of count_children
                          C_OUTLINE *outline,  // parent outline
-                         inT32 max_count,     // max output
-                         inT16 depth);        // level of recursion
+                         int32_t max_count,     // max output
+                         int16_t depth);        // level of recursion
     void extract_children(                     //single level get
                           C_OUTLINE *outline,  //parent outline
                           C_OUTLINE_IT *it);   //destination iterator
 
   private:
-    C_OUTLINE_LIST * buckets;    //array of buckets
-    inT16 bxdim;                 //size of array
-    inT16 bydim;
+    std::unique_ptr<C_OUTLINE_LIST[]> buckets;    //array of buckets
+    int16_t bxdim;                 //size of array
+    int16_t bydim;
     ICOORD bl;                   //corners
     ICOORD tr;
-    inT32 index;                 //for extraction scan
+    int32_t index;                 //for extraction scan
 };
 
 void extract_edges(Pix* pix,        // thresholded image
@@ -89,9 +87,9 @@ void empty_buckets(                     //find blobs
                    BLOCK *block,        //block to scan
                    OL_BUCKETS *buckets  //output buckets
                   );
-BOOL8 capture_children(                       //find children
-                       OL_BUCKETS *buckets,   //bucket sort clanss
-                       C_BLOB_IT *reject_it,  //dead grandchildren
-                       C_OUTLINE_IT *blob_it  //output outlines
-                      );
+bool capture_children(                       //find children
+        OL_BUCKETS* buckets,   //bucket sort clanss
+        C_BLOB_IT* reject_it,  //dead grandchildren
+        C_OUTLINE_IT* blob_it  //output outlines
+);
 #endif

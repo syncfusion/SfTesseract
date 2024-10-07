@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        fpchop.cpp  (Formerly fp_chop.c)
  * Description: Code to chop fixed pitch text into character cells.
- * Author:		Ray Smith
- * Created:		Thu Sep 16 11:14:15 BST 1993
+ * Author:      Ray Smith
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,29 +16,21 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
-#include          "stderr.h"
-#include          "blobbox.h"
-#include          "statistc.h"
-#include          "drawtord.h"
-#include          "tovars.h"
-#include          "topitch.h"
-#include          "fpchop.h"
-#include          "notdll.h"
+#include "blobbox.h"
+#include "statistc.h"
+#include "drawtord.h"
+#include "tovars.h"
+#include "topitch.h"
+#include "fpchop.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
 
-#define EXTERN
-
-EXTERN INT_VAR (textord_fp_chop_error, 2,
+INT_VAR (textord_fp_chop_error, 2,
 "Max allowed bending of chop cells");
-EXTERN double_VAR (textord_fp_chop_snap, 0.5,
+double_VAR (textord_fp_chop_snap, 0.5,
 "Max distance of chop pt from vertex");
 
 ELISTIZE(C_OUTLINE_FRAG)
@@ -54,12 +45,12 @@ ROW *fixed_pitch_words(                 //find lines
                        TO_ROW *row,     //row to do
                        FCOORD rotation  //for drawing
                       ) {
-  BOOL8 bol;                     //start of line
-  uinT8 blanks;                  //in front of word
-  uinT8 new_blanks;              //blanks in empty cell
-  inT16 chop_coord;              //chop boundary
-  inT16 prev_chop_coord;         //start of cell
-  inT16 rep_left;                //left edge of rep word
+  bool bol;                     //start of line
+  uint8_t blanks;                  //in front of word
+  uint8_t new_blanks;              //blanks in empty cell
+  int16_t chop_coord;              //chop boundary
+  int16_t prev_chop_coord;         //start of cell
+  int16_t rep_left;                //left edge of rep word
   ROW *real_row;                 //output row
   C_OUTLINE_LIST left_coutlines;
   C_OUTLINE_LIST right_coutlines;
@@ -70,29 +61,28 @@ ROW *fixed_pitch_words(                 //find lines
                                  //repeated blobs
   WERD_IT rep_it = &row->rep_words;
   WERD *word;                    //new word
-  inT32 xstarts[2];              //row ends
-  double coeffs[3];              //quadratic
-  inT32 prev_x;                  //end of prev blob
+  int32_t xstarts[2];              //row ends
+  int32_t prev_x;                  //end of prev blob
                                  //iterator
   BLOBNBOX_IT box_it = row->blob_list ();
                                  //boundaries
   ICOORDELT_IT cell_it = &row->char_cells;
 
 #ifndef GRAPHICS_DISABLED
-  if (textord_show_page_cuts && to_win != NULL) {
+  if (textord_show_page_cuts && to_win != nullptr) {
     plot_row_cells (to_win, ScrollView::RED, row, 0, &row->char_cells);
   }
 #endif
 
-  prev_x = -MAX_INT16;
-  bol = TRUE;
+  prev_x = -INT16_MAX;
+  bol = true;
   blanks = 0;
   if (rep_it.empty ())
-    rep_left = MAX_INT16;
+    rep_left = INT16_MAX;
   else
     rep_left = rep_it.data ()->bounding_box ().left ();
   if (box_it.empty ())
-    return NULL;                 //empty row
+    return nullptr;                 //empty row
   xstarts[0] = box_it.data ()->bounding_box ().left ();
   if (rep_left < xstarts[0]) {
     xstarts[0] = rep_left;
@@ -102,11 +92,11 @@ ROW *fixed_pitch_words(                 //find lines
     tprintf ("Leftmost blob is at (%d,%d)\n",
       box_it.data ()->bounding_box ().left (),
       box_it.data ()->bounding_box ().bottom ());
-    return NULL;
+    return nullptr;
   }
   ASSERT_HOST (!cell_it.empty () && !row->char_cells.singleton ());
   prev_chop_coord = cell_it.data ()->x ();
-  word = NULL;
+  word = nullptr;
   while (rep_left < cell_it.data ()->x ()) {
     word = add_repeated_word (&rep_it, rep_left, prev_chop_coord,
       blanks, row->fixed_pitch, &word_it);
@@ -125,43 +115,43 @@ ROW *fixed_pitch_words(                 //find lines
         &left_coutlines,
         &right_coutlines);
       box_it.forward ();
-      while (!box_it.empty() && box_it.data()->cblob() == NULL) {
+      while (!box_it.empty() && box_it.data()->cblob() == nullptr) {
         delete box_it.extract();
         box_it.forward();
       }
     }
     if (!right_coutlines.empty() && left_coutlines.empty())
-      split_to_blob (NULL, chop_coord,
+      split_to_blob (nullptr, chop_coord,
         textord_fp_chop_error + 0.5f,
         &left_coutlines,
         &right_coutlines);
-    if (!left_coutlines.empty ())
-      cblob_it.add_after_then_move (new C_BLOB (&left_coutlines));
-    else {
+    if (!left_coutlines.empty()) {
+      cblob_it.add_after_then_move(new C_BLOB(&left_coutlines));
+    } else {
       if (rep_left < chop_coord) {
         if (rep_left > prev_chop_coord)
-          new_blanks = (uinT8) floor ((rep_left - prev_chop_coord)
-            / row->fixed_pitch + 0.5);
+          new_blanks = static_cast<uint8_t>(floor ((rep_left - prev_chop_coord)
+            / row->fixed_pitch + 0.5));
         else
           new_blanks = 0;
       }
       else {
         if (chop_coord > prev_chop_coord)
-          new_blanks = (uinT8) floor ((chop_coord - prev_chop_coord)
-            / row->fixed_pitch + 0.5);
+          new_blanks = static_cast<uint8_t>(floor ((chop_coord - prev_chop_coord)
+            / row->fixed_pitch + 0.5));
         else
           new_blanks = 0;
       }
       if (!cblob_it.empty()) {
-        if (blanks < 1 && word != NULL && !word->flag (W_REP_CHAR))
+        if (blanks < 1 && word != nullptr && !word->flag (W_REP_CHAR))
           blanks = 1;
-        word = new WERD (&cblobs, blanks, NULL);
+        word = new WERD (&cblobs, blanks, nullptr);
         cblob_it.set_to_list (&cblobs);
-        word->set_flag (W_DONT_CHOP, TRUE);
+        word->set_flag (W_DONT_CHOP, true);
         word_it.add_after_then_move (word);
         if (bol) {
-          word->set_flag (W_BOL, TRUE);
-          bol = FALSE;
+          word->set_flag (W_BOL, true);
+          bol = false;
         }
         blanks = new_blanks;
       }
@@ -176,26 +166,23 @@ ROW *fixed_pitch_words(                 //find lines
       prev_chop_coord = chop_coord;
   }
   if (!cblob_it.empty()) {
-    word = new WERD(&cblobs, blanks, NULL);
-    word->set_flag (W_DONT_CHOP, TRUE);
+    word = new WERD(&cblobs, blanks, nullptr);
+    word->set_flag (W_DONT_CHOP, true);
     word_it.add_after_then_move (word);
     if (bol)
-      word->set_flag (W_BOL, TRUE);
+      word->set_flag (W_BOL, true);
   }
-  ASSERT_HOST (word != NULL);
+  ASSERT_HOST (word != nullptr);
   while (!rep_it.empty ()) {
     add_repeated_word (&rep_it, rep_left, prev_chop_coord,
       blanks, row->fixed_pitch, &word_it);
   }
                                  //at end of line
-  word_it.data ()->set_flag (W_EOL, TRUE);
+  word_it.data ()->set_flag (W_EOL, true);
   if (prev_chop_coord > prev_x)
     prev_x = prev_chop_coord;
   xstarts[1] = prev_x + 1;
-  coeffs[0] = 0;
-  coeffs[1] = row->line_m ();
-  coeffs[2] = row->line_c ();
-  real_row = new ROW (row, (inT16) row->kern_size, (inT16) row->space_size);
+  real_row = new ROW (row, static_cast<int16_t>(row->kern_size), static_cast<int16_t>(row->space_size));
   word_it.set_to_list (real_row->word_list ());
                                  //put words in row
   word_it.add_list_after (&words);
@@ -212,17 +199,17 @@ ROW *fixed_pitch_words(                 //find lines
 
 WERD *add_repeated_word(                         //move repeated word
                         WERD_IT *rep_it,         //repeated words
-                        inT16 &rep_left,         //left edge of word
-                        inT16 &prev_chop_coord,  //previous word end
-                        uinT8 &blanks,           //no of blanks
+                        int16_t &rep_left,         //left edge of word
+                        int16_t &prev_chop_coord,  //previous word end
+                        uint8_t &blanks,           //no of blanks
                         float pitch,             //char cell size
                         WERD_IT *word_it         //list of words
                        ) {
   WERD *word;                    //word to move
-  inT16 new_blanks;              //extra blanks
+  int16_t new_blanks;              //extra blanks
 
   if (rep_left > prev_chop_coord) {
-    new_blanks = (uinT8) floor ((rep_left - prev_chop_coord) / pitch + 0.5);
+    new_blanks = static_cast<uint8_t>(floor ((rep_left - prev_chop_coord) / pitch + 0.5));
     blanks += new_blanks;
   }
   word = rep_it->extract ();
@@ -231,7 +218,7 @@ WERD *add_repeated_word(                         //move repeated word
   word->set_blanks (blanks);
   rep_it->forward ();
   if (rep_it->empty ())
-    rep_left = MAX_INT16;
+    rep_left = INT16_MAX;
   else
     rep_left = rep_it->data ()->bounding_box ().left ();
   blanks = 0;
@@ -248,25 +235,25 @@ WERD *add_repeated_word(                         //move repeated word
 
 void split_to_blob(                                 //split the blob
                    BLOBNBOX *blob,                  //blob to split
-                   inT16 chop_coord,                //place to chop
+                   int16_t chop_coord,                //place to chop
                    float pitch_error,               //allowed deviation
                    C_OUTLINE_LIST *left_coutlines,  //for cblobs
                    C_OUTLINE_LIST *right_coutlines) {
   C_BLOB *real_cblob;            //cblob to chop
 
-  if (blob != NULL) {
+  if (blob != nullptr) {
     real_cblob = blob->cblob();
   } else {
-    real_cblob = NULL;
+    real_cblob = nullptr;
   }
-  if (!right_coutlines->empty() || real_cblob != NULL)
+  if (!right_coutlines->empty() || real_cblob != nullptr)
     fixed_chop_cblob(real_cblob,
                      chop_coord,
                      pitch_error,
                      left_coutlines,
                      right_coutlines);
-  if (blob != NULL)
-    delete blob;                 //free it
+
+  delete blob;
 }
 
 /**********************************************************************
@@ -278,14 +265,14 @@ void split_to_blob(                                 //split the blob
 
 void fixed_chop_cblob(                                //split the blob
                       C_BLOB *blob,                   //blob to split
-                      inT16 chop_coord,               //place to chop
+                      int16_t chop_coord,               //place to chop
                       float pitch_error,              //allowed deviation
                       C_OUTLINE_LIST *left_outlines,  //left half of chop
                       C_OUTLINE_LIST *right_outlines  //right half of chop
                      ) {
   C_OUTLINE *old_right;          //already there
   C_OUTLINE_LIST new_outlines;   //new right ones
-                                 //ouput iterator
+                                 //output iterator
   C_OUTLINE_IT left_it = left_outlines;
                                  //in/out iterator
   C_OUTLINE_IT right_it = right_outlines;
@@ -304,7 +291,7 @@ void fixed_chop_cblob(                                //split the blob
     }
     right_it.add_list_before (&new_outlines);
   }
-  if (blob != NULL) {
+  if (blob != nullptr) {
     blob_it.set_to_list (blob->out_list ());
     for (blob_it.mark_cycle_pt (); !blob_it.cycled_list ();
       blob_it.forward ())
@@ -324,7 +311,7 @@ void fixed_chop_cblob(                                //split the blob
 
 void fixed_split_coutline(                        //chop the outline
                           C_OUTLINE *srcline,     //source outline
-                          inT16 chop_coord,       //place to chop
+                          int16_t chop_coord,       //place to chop
                           float pitch_error,      //allowed deviation
                           C_OUTLINE_IT *left_it,  //left half of chop
                           C_OUTLINE_IT *right_it  //right half of chop
@@ -341,53 +328,56 @@ void fixed_split_coutline(                        //chop the outline
                                  //for holes
   C_OUTLINE_IT child_it = srcline->child ();
 
-  srcbox = srcline->bounding_box ();
-                                 //left of line
-  if (srcbox.left () + srcbox.right () <= chop_coord * 2
-                                 //and not far over
-    && srcbox.right () < chop_coord + pitch_error)
-                                 //stick whole in left
-    left_it->add_after_then_move (srcline);
-  else if (srcbox.left () + srcbox.right () > chop_coord * 2
-    && srcbox.left () > chop_coord - pitch_error)
-                                 //stick whole in right
-    right_it->add_before_stay_put (srcline);
-  else {
-                                 //needs real chopping
-    if (fixed_chop_coutline (srcline, chop_coord, pitch_error,
-    &left_frags, &right_frags)) {
-      for (child_it.mark_cycle_pt (); !child_it.cycled_list ();
-      child_it.forward ()) {
-        child = child_it.extract ();
-        srcbox = child->bounding_box ();
-        if (srcbox.right () < chop_coord)
-          left_ch_it.add_after_then_move (child);
-        else if (srcbox.left () > chop_coord)
+  srcbox = srcline->bounding_box();
+  if (srcbox.left() + srcbox.right() <= chop_coord * 2
+      && srcbox.right() < chop_coord + pitch_error) {
+    // Whole outline is in the left side or not far over the chop_coord,
+    // so put the whole thing on the left.
+    left_it->add_after_then_move(srcline);
+  } else if (srcbox.left() + srcbox.right() > chop_coord * 2
+             && srcbox.left () > chop_coord - pitch_error) {
+    // Whole outline is in the right side or not far over the chop_coord,
+    // so put the whole thing on the right.
+   right_it->add_before_stay_put(srcline);
+  } else {
+    // Needs real chopping.
+    if (fixed_chop_coutline(srcline, chop_coord, pitch_error,
+        &left_frags, &right_frags)) {
+      for (child_it.mark_cycle_pt(); !child_it.cycled_list();
+           child_it.forward()) {
+        child = child_it.extract();
+        srcbox = child->bounding_box();
+        if (srcbox.right() < chop_coord) {
+          // Whole child is on the left.
+          left_ch_it.add_after_then_move(child);
+        } else if (srcbox.left() > chop_coord) {
+          // Whole child is on the right.
           right_ch_it.add_after_then_move (child);
-        else {
-          if (fixed_chop_coutline (child, chop_coord, pitch_error,
-            &left_frags, &right_frags))
+        } else {
+          // No pitch_error is allowed when chopping children to prevent
+          // impossible outlines from being created.
+          if (fixed_chop_coutline(child, chop_coord, 0.0f,
+              &left_frags, &right_frags)) {
             delete child;
-          else {
-            if (srcbox.left () + srcbox.right () <= chop_coord * 2)
-              left_ch_it.add_after_then_move (child);
+          } else {
+            if (srcbox.left() + srcbox.right() <= chop_coord * 2)
+              left_ch_it.add_after_then_move(child);
             else
-              right_ch_it.add_after_then_move (child);
+              right_ch_it.add_after_then_move(child);
           }
         }
       }
       close_chopped_cfragments(&left_frags, &left_ch, pitch_error, left_it);
       close_chopped_cfragments(&right_frags, &right_ch, pitch_error, right_it);
-      ASSERT_HOST (left_ch.empty () && right_ch.empty ());
-      //no children left
-      delete srcline;            //smashed up
-    }
-    else {
-      if (srcbox.left () + srcbox.right () <= chop_coord * 2)
-                                 //stick whole in left
-        left_it->add_after_then_move (srcline);
+      ASSERT_HOST(left_ch.empty() && right_ch.empty());
+      // No children left.
+      delete srcline;            // Smashed up.
+    } else {
+      // Chop failed. Just use middle coord.
+      if (srcbox.left() + srcbox.right() <= chop_coord * 2)
+        left_it->add_after_then_move(srcline);  // Stick whole in left.
       else
-        right_it->add_before_stay_put (srcline);
+        right_it->add_before_stay_put(srcline);
     }
   }
 }
@@ -398,33 +388,31 @@ void fixed_split_coutline(                        //chop the outline
  *
  * Chop the given coutline (if necessary) placing the fragments which
  * fall either side of the chop line into the appropriate list.
- * If the coutline lies too heavily to one side to chop, FALSE is returned.
+ * If the coutline lies too heavily to one side to chop, false is returned.
  **********************************************************************/
 
-BOOL8 fixed_chop_coutline(                                  //chop the outline
-                          C_OUTLINE *srcline,               //source outline
-                          inT16 chop_coord,                 //place to chop
-                          float pitch_error,                //allowed deviation
-                          C_OUTLINE_FRAG_LIST *left_frags,  //left half of chop
-                          C_OUTLINE_FRAG_LIST *right_frags  //right half of chop
-                         ) {
-  BOOL8 first_frag;              //fragment
-  BOOL8 anticlock;               //direction of loop
-  inT16 left_edge;               //of outline
-  inT16 startindex;              //in first fragment
-  inT32 length;                  //of outline
-  inT16 stepindex;               //into outline
-  inT16 head_index;              //start of fragment
+bool fixed_chop_coutline(                                  //chop the outline
+        C_OUTLINE* srcline,               //source outline
+        int16_t chop_coord,                 //place to chop
+        float pitch_error,                //allowed deviation
+        C_OUTLINE_FRAG_LIST* left_frags,  //left half of chop
+        C_OUTLINE_FRAG_LIST* right_frags  //right half of chop
+) {
+  bool first_frag;              //fragment
+  int16_t left_edge;               //of outline
+  int16_t startindex;              //in first fragment
+  int32_t length;                  //of outline
+  int16_t stepindex;               //into outline
+  int16_t head_index;              //start of fragment
   ICOORD head_pos;               //start of fragment
-  inT16 tail_index;              //end of fragment
+  int16_t tail_index;              //end of fragment
   ICOORD tail_pos;               //end of fragment
   ICOORD pos;                    //current point
-  inT16 first_index = 0;         //first tail
+  int16_t first_index = 0;         //first tail
   ICOORD first_pos;              //first tail
 
   length = srcline->pathlength ();
   pos = srcline->start_pos ();
-  anticlock = srcline->turn_direction () > 0;
   left_edge = pos.x ();
   tail_index = 0;
   tail_pos = pos;
@@ -437,10 +425,10 @@ BOOL8 fixed_chop_coutline(                                  //chop the outline
     pos += srcline->step (stepindex);
   }
   if (left_edge >= chop_coord - pitch_error)
-    return FALSE;                //not worth it
+    return false;                //not worth it
 
   startindex = tail_index;
-  first_frag = TRUE;
+  first_frag = true;
   head_index = tail_index;
   head_pos = tail_pos;
   do {
@@ -453,13 +441,11 @@ BOOL8 fixed_chop_coutline(                                  //chop the outline
     while (tail_pos.x () != chop_coord && tail_index != startindex);
     if (tail_index == startindex) {
       if (first_frag)
-        return FALSE;            //doesn't cross line
+        return false;            //doesn't cross line
       else
         break;
     }
-    //#ifdef __UNIX__
     ASSERT_HOST (head_index != tail_index);
-    //#endif
     if (!first_frag) {
       save_chop_cfragment(head_index,
                           head_pos,
@@ -471,7 +457,7 @@ BOOL8 fixed_chop_coutline(                                  //chop the outline
     else {
       first_index = tail_index;
       first_pos = tail_pos;
-      first_frag = FALSE;
+      first_frag = false;
     }
     while (srcline->step (tail_index).x () == 0) {
       tail_pos += srcline->step (tail_index);
@@ -489,9 +475,7 @@ BOOL8 fixed_chop_coutline(                                  //chop the outline
           tail_index = 0;
       }
       while (tail_pos.x () != chop_coord);
-      //#ifdef __UNIX__
       ASSERT_HOST (head_index != tail_index);
-      //#endif
       save_chop_cfragment(head_index,
                           head_pos,
                           tail_index,
@@ -515,255 +499,8 @@ BOOL8 fixed_chop_coutline(                                  //chop the outline
                       first_pos,
                       srcline,
                       left_frags);
-  return TRUE;                   //did some chopping
+  return true;                   //did some chopping
 }
-
-
-/**********************************************************************
- * next_anti_left_seg
- *
- * Search the outline for a suitable point at which it crosses the
- * chop_coord from left to right.
- **********************************************************************/
-
-inT16 next_anti_left_seg(                     //chop the outline
-                         C_OUTLINE *srcline,  //source outline
-                         inT16 tail_index,    //of tailpos
-                         inT16 startindex,    //end of search
-                         inT32 length,        //of outline
-                         inT16 chop_coord,    //place to chop
-                         float pitch_error,   //allowed deviation
-                         ICOORD *tail_pos     //current position
-                        ) {
-  BOOL8 test_valid;              //test pt valid
-  inT16 chop_starty;             //test chop pt
-  inT16 test_index;              //possible chop pt
-  ICOORD test_pos;               //possible chop pt
-  ICOORD prev_step;              //in x to tail pos
-
-  test_valid = FALSE;
-  chop_starty = -MAX_INT16;
-  test_index = tail_index;       //stop warnings
-  do {
-    *tail_pos += srcline->step (tail_index);
-    prev_step = srcline->step (tail_index);
-    tail_index++;
-    if (tail_index >= length)
-      tail_index = 0;
-    if (test_valid && tail_pos->x () == chop_coord && prev_step.x () < 0) {
-      if (tail_pos->y () >= chop_starty) {
-        chop_starty = -MAX_INT16;
-        test_valid = FALSE;
-      }
-      else {
-        *tail_pos = test_pos;
-        tail_index = test_index;
-        break;                   //must chop there
-      }
-    }
-    if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).x () > 0
-    && tail_pos->y () > chop_starty) {
-      chop_starty = tail_pos->y ();
-      test_index = tail_index;
-      test_pos = *tail_pos;
-      test_valid = TRUE;
-    }
-    else if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).y () < 0
-      && prev_step.x () > 0 && tail_pos->y () > chop_starty)
-      break;                     //must chop here
-  }
-  while (tail_index != startindex
-    && tail_pos->x () < chop_coord + pitch_error);
-  return tail_index;
-}
-
-
-/**********************************************************************
- * next_anti_right_seg
- *
- * Search the outline for a suitable point at which it crosses the
- * chop_coord from right to left.
- **********************************************************************/
-
-inT16 next_anti_right_seg(                     //chop the outline
-                          C_OUTLINE *srcline,  //source outline
-                          inT16 tail_index,    //of tailpos
-                          inT16 startindex,    //end of search
-                          inT32 length,        //of outline
-                          inT16 chop_coord,    //place to chop
-                          float pitch_error,   //allowed deviation
-                          ICOORD *tail_pos     //current position
-                         ) {
-  BOOL8 test_valid;              //test pt valid
-  inT16 chop_starty;             //test chop pt
-  inT16 test_index;              //possible chop pt
-  ICOORD test_pos;               //possible chop pt
-  ICOORD prev_step;              //in x to tail pos
-
-  test_valid = FALSE;
-  chop_starty = MAX_INT16;
-  test_index = tail_index;       //stop warnings
-  do {
-                                 //move forward
-    *tail_pos += srcline->step (tail_index);
-    prev_step = srcline->step (tail_index);
-    tail_index++;
-    if (tail_index >= length)
-      tail_index = 0;
-    if (test_valid && tail_pos->x () == chop_coord && prev_step.x () > 0) {
-      if (tail_pos->y () <= chop_starty) {
-        chop_starty = MAX_INT16;
-        test_valid = FALSE;
-      }
-      else {
-        *tail_pos = test_pos;
-        tail_index = test_index;
-        break;                   //must chop there
-      }
-    }
-    if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).x () < 0
-    && tail_pos->y () < chop_starty) {
-      chop_starty = tail_pos->y ();
-      test_index = tail_index;
-      test_pos = *tail_pos;
-      test_valid = TRUE;         //save possible chop pt
-    }
-    else if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).y () > 0
-      && prev_step.x () < 0 && tail_pos->y () < chop_starty)
-      break;                     //must chop here
-  }
-  while (tail_index != startindex
-    && tail_pos->x () > chop_coord - pitch_error);
-  return tail_index;
-}
-
-
-/**********************************************************************
- * next_clock_left_seg
- *
- * Search the outline for a suitable point at which it crosses the
- * chop_coord from left to right.
- **********************************************************************/
-
-inT16 next_clock_left_seg(                     //chop the outline
-                          C_OUTLINE *srcline,  //source outline
-                          inT16 tail_index,    //of tailpos
-                          inT16 startindex,    //end of search
-                          inT32 length,        //of outline
-                          inT16 chop_coord,    //place to chop
-                          float pitch_error,   //allowed deviation
-                          ICOORD *tail_pos     //current position
-                         ) {
-  BOOL8 test_valid;              //test pt valid
-  inT16 chop_starty;             //test chop pt
-  inT16 test_index;              //possible chop pt
-  ICOORD test_pos;               //possible chop pt
-  ICOORD prev_step;              //in x to tail pos
-
-  test_valid = FALSE;
-  chop_starty = MAX_INT16;
-  test_index = tail_index;       //stop warnings
-  do {
-    *tail_pos += srcline->step (tail_index);
-    prev_step = srcline->step (tail_index);
-    tail_index++;
-    if (tail_index >= length)
-      tail_index = 0;
-    if (test_valid && tail_pos->x () == chop_coord && prev_step.x () < 0) {
-      if (tail_pos->y () <= chop_starty) {
-        chop_starty = MAX_INT16;
-        test_valid = FALSE;
-      }
-      else {
-        *tail_pos = test_pos;
-        tail_index = test_index;
-        break;                   //must chop there
-      }
-    }
-    if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).x () > 0
-    && tail_pos->y () < chop_starty) {
-      chop_starty = tail_pos->y ();
-      test_index = tail_index;
-      test_pos = *tail_pos;
-      test_valid = TRUE;
-    }
-    else if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).y () > 0
-      && prev_step.x () > 0 && tail_pos->y () < chop_starty)
-      break;                     //must chop here
-  }
-  while (tail_index != startindex
-    && tail_pos->x () < chop_coord + pitch_error);
-  return tail_index;
-}
-
-
-/**********************************************************************
- * next_clock_right_seg
- *
- * Search the outline for a suitable point at which it crosses the
- * chop_coord from right to left.
- **********************************************************************/
-
-inT16 next_clock_right_seg(                     //chop the outline
-                           C_OUTLINE *srcline,  //source outline
-                           inT16 tail_index,    //of tailpos
-                           inT16 startindex,    //end of search
-                           inT32 length,        //of outline
-                           inT16 chop_coord,    //place to chop
-                           float pitch_error,   //allowed deviation
-                           ICOORD *tail_pos     //current position
-                          ) {
-  BOOL8 test_valid;              //test pt valid
-  inT16 chop_starty;             //test chop pt
-  inT16 test_index;              //possible chop pt
-  ICOORD test_pos;               //possible chop pt
-  ICOORD prev_step;              //in x to tail pos
-
-  test_valid = FALSE;
-  chop_starty = MAX_INT16;
-  test_index = tail_index;       //stop warnings
-  do {
-                                 //move forward
-    *tail_pos += srcline->step (tail_index);
-    prev_step = srcline->step (tail_index);
-    tail_index++;
-    if (tail_index >= length)
-      tail_index = 0;
-    if (test_valid && tail_pos->x () == chop_coord && prev_step.x () > 0) {
-      if (tail_pos->y () >= chop_starty) {
-        chop_starty = MAX_INT16;
-        test_valid = FALSE;
-      }
-      else {
-        *tail_pos = test_pos;
-        tail_index = test_index;
-        break;                   //must chop there
-      }
-    }
-    if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).x () < 0
-    && tail_pos->y () > chop_starty) {
-      chop_starty = tail_pos->y ();
-      test_index = tail_index;
-      test_pos = *tail_pos;
-      test_valid = TRUE;         //save possible chop pt
-    }
-    else if (tail_pos->x () == chop_coord
-      && srcline->step (tail_index).y () < 0
-      && prev_step.x () < 0 && tail_pos->y () > chop_starty)
-      break;                     //must chop here
-  }
-  while (tail_index != startindex
-    && tail_pos->x () > chop_coord - pitch_error);
-  return tail_index;
-}
-
 
 /**********************************************************************
  * save_chop_cfragment
@@ -772,18 +509,18 @@ inT16 next_clock_right_seg(                     //chop the outline
  **********************************************************************/
 
 void save_chop_cfragment(                            //chop the outline
-                         inT16 head_index,           //head of fragment
+                         int16_t head_index,           //head of fragment
                          ICOORD head_pos,            //head of fragment
-                         inT16 tail_index,           //tail of fragment
+                         int16_t tail_index,           //tail of fragment
                          ICOORD tail_pos,            //tail of fragment
                          C_OUTLINE *srcline,         //source of edgesteps
                          C_OUTLINE_FRAG_LIST *frags  //fragment list
                         ) {
-  inT16 jump;                    //gap across end
-  inT16 stepcount;               //total steps
+  int16_t jump;                    //gap across end
+  int16_t stepcount;               //total steps
   C_OUTLINE_FRAG *head;          //head of fragment
   C_OUTLINE_FRAG *tail;          //tail of fragment
-  inT16 tail_y;                  //ycoord of tail
+  int16_t tail_y;                  //ycoord of tail
 
   ASSERT_HOST (tail_pos.x () == head_pos.x ());
   ASSERT_HOST (tail_index != head_index);
@@ -815,8 +552,8 @@ C_OUTLINE_FRAG::C_OUTLINE_FRAG(                     //record fragment
                                ICOORD start_pt,     //start coord
                                ICOORD end_pt,       //end coord
                                C_OUTLINE *outline,  //source of steps
-                               inT16 start_index,
-                               inT16 end_index) {
+                               int16_t start_index,
+                               int16_t end_index) {
   start = start_pt;
   end = end_pt;
   ycoord = start_pt.y ();
@@ -838,19 +575,19 @@ C_OUTLINE_FRAG::C_OUTLINE_FRAG(                     //record fragment
       for (; i < end_index + len; ++i)
         steps[i - start_index] = outline->step_dir(i - len);
   }
-  other_end = NULL;
+  other_end = nullptr;
   delete close();
 }
 
 
 C_OUTLINE_FRAG::C_OUTLINE_FRAG(                       //record fragment
                                C_OUTLINE_FRAG *head,  //other end
-                               inT16 tail_y) {
+                               int16_t tail_y) {
   ycoord = tail_y;
   other_end = head;
   start = head->start;
   end = head->end;
-  steps = NULL;
+  steps = nullptr;
   stepcount = 0;
 }
 
@@ -906,36 +643,36 @@ void close_chopped_cfragments(                             //chop the outline
   C_OUTLINE_IT child_it = children;
   C_OUTLINE_IT olchild_it;       //children of outline
 
-  while (!frag_it.empty ()) {
-    frag_it.move_to_first ();
-                                 //get bottom one
-    bottom_frag = frag_it.extract ();
-    frag_it.forward ();
-    top_frag = frag_it.data ();  //look at next
-    if ((bottom_frag->steps == 0 && top_frag->steps == 0)
-    || (bottom_frag->steps != 0 && top_frag->steps != 0)) {
-      if (frag_it.data_relative (1)->ycoord == top_frag->ycoord)
-        frag_it.forward ();
+  while (!frag_it.empty()) {
+    frag_it.move_to_first();
+                                 // get bottom one
+    bottom_frag = frag_it.extract();
+    frag_it.forward();
+    top_frag = frag_it.data();  // look at next
+    if ((bottom_frag->steps == nullptr && top_frag->steps == nullptr)
+    || (bottom_frag->steps != nullptr && top_frag->steps != nullptr)) {
+      if (frag_it.data_relative(1)->ycoord == top_frag->ycoord)
+        frag_it.forward();
     }
-    top_frag = frag_it.extract ();
+    top_frag = frag_it.extract();
     if (top_frag->other_end != bottom_frag) {
-      outline = join_chopped_fragments (bottom_frag, top_frag);
-      ASSERT_HOST (outline == NULL);
-    }
-    else {
-      outline = join_chopped_fragments (bottom_frag, top_frag);
-      ASSERT_HOST (outline != NULL);
-      olchild_it.set_to_list (outline->child ());
-      for (child_it.mark_cycle_pt (); !child_it.cycled_list ();
-      child_it.forward ()) {
-        child = child_it.data ();
-        if (*child < *outline)
-          olchild_it.add_to_end (child_it.extract ());
+      outline = join_chopped_fragments(bottom_frag, top_frag);
+      ASSERT_HOST(outline == nullptr);
+    } else {
+      outline = join_chopped_fragments(bottom_frag, top_frag);
+      if (outline != nullptr) {
+        olchild_it.set_to_list(outline->child());
+        for (child_it.mark_cycle_pt(); !child_it.cycled_list();
+             child_it.forward()) {
+          child = child_it.data();
+          if (*child < *outline)
+            olchild_it.add_to_end(child_it.extract());
+        }
+        if (outline->bounding_box().width() > pitch_error)
+          dest_it->add_after_then_move(outline);
+        else
+          delete outline;          // Make it disappear.
       }
-      if (outline->bounding_box ().width () > pitch_error)
-        dest_it->add_after_then_move (outline);
-      else
-        delete outline;          //make it disappear
     }
   }
   while (!child_it.empty ()) {
@@ -959,7 +696,7 @@ C_OUTLINE *join_chopped_fragments(                         //join pieces
   C_OUTLINE *outline;            //closed loop
 
   if (bottom->other_end == top) {
-    if (bottom->steps == 0)
+    if (bottom->steps == nullptr)
       outline = top->close ();   //turn to outline
     else
       outline = bottom->close ();
@@ -967,27 +704,26 @@ C_OUTLINE *join_chopped_fragments(                         //join pieces
     delete bottom;
     return outline;
   }
-  if (bottom->steps == 0) {
-    ASSERT_HOST (top->steps != 0);
+  if (bottom->steps == nullptr) {
+    ASSERT_HOST (top->steps != nullptr);
     join_segments (bottom->other_end, top);
   }
   else {
-    ASSERT_HOST (top->steps == 0);
+    ASSERT_HOST (top->steps == nullptr);
     join_segments (top->other_end, bottom);
   }
   top->other_end->other_end = bottom->other_end;
   bottom->other_end->other_end = top->other_end;
   delete bottom;
   delete top;
-  return NULL;
+  return nullptr;
 }
-
 
 /**********************************************************************
  * join_segments
  *
  * Join the two edgestep fragments such that the second comes after
- * the first and the gap beween them is closed.
+ * the first and the gap between them is closed.
  **********************************************************************/
 
 void join_segments(                         //join pieces
@@ -995,8 +731,8 @@ void join_segments(                         //join pieces
                    C_OUTLINE_FRAG *top      //top of cut
                   ) {
   DIR128 *steps;                  //new steps
-  inT32 stepcount;               //no of steps
-  inT16 fake_count;              //fake steps
+  int32_t stepcount;               //no of steps
+  int16_t fake_count;              //fake steps
   DIR128 fake_step;               //step entry
 
   ASSERT_HOST (bottom->end.x () == top->start.x ());
@@ -1030,8 +766,8 @@ void join_segments(                         //join pieces
 
 C_OUTLINE *C_OUTLINE_FRAG::close() {  //join pieces
   DIR128 *new_steps;              //new steps
-  inT32 new_stepcount;           //no of steps
-  inT16 fake_count;              //fake steps
+  int32_t new_stepcount;           //no of steps
+  int16_t fake_count;              //fake steps
   DIR128 fake_step;               //step entry
 
   ASSERT_HOST (start.x () == end.x ());
@@ -1044,10 +780,12 @@ C_OUTLINE *C_OUTLINE_FRAG::close() {  //join pieces
     fake_step = 96;
 
   new_stepcount = stepcount + fake_count;
+  if (new_stepcount > C_OUTLINE::kMaxOutlineLength)
+    return nullptr;  // Can't join them
   new_steps = new DIR128[new_stepcount];
   memmove(new_steps, steps, stepcount);
   memset (new_steps + stepcount, fake_step.get_dir(), fake_count);
-  C_OUTLINE* result = new C_OUTLINE (start, new_steps, new_stepcount);
+  auto* result = new C_OUTLINE (start, new_steps, new_stepcount);
   delete [] new_steps;
   return result;
 }
@@ -1063,8 +801,7 @@ C_OUTLINE *C_OUTLINE_FRAG::close() {  //join pieces
 C_OUTLINE_FRAG & C_OUTLINE_FRAG::operator= (
 const C_OUTLINE_FRAG & src       //fragment to copy
 ) {
-  if (steps != NULL)
-    delete [] steps;
+  delete [] steps;
 
   stepcount = src.stepcount;
   steps = new DIR128[stepcount];

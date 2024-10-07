@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        mod128.h  (Formerly dir128.h)
  * Description: Header for class which implements modulo arithmetic.
- * Author:					Ray Smith
- * Created:					Tue Mar 26 17:48:13 GMT 1991
+ * Author:          Ray Smith
+ * Created:         Tue Mar 26 17:48:13 GMT 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,37 +29,36 @@
 class DLLSYM DIR128
 {
   public:
-    DIR128() {
-    }                            //empty constructor
+    DIR128() = default;
 
     DIR128(                //constructor
-           inT16 value) {  //value to assign
+           int16_t value) {  //value to assign
       value %= MODULUS;          //modulo arithmetic
       if (value < 0)
         value += MODULUS;        //done properly
-      dir = (inT8) value;
+      dir = static_cast<int8_t>(value);
     }
     DIR128(const FCOORD fc);  //quantize vector
 
-    DIR128 & operator= (         //assign of inT16
-    inT16 value) {               //value to assign
+    DIR128 & operator= (         //assign of int16_t
+    int16_t value) {               //value to assign
       value %= MODULUS;          //modulo arithmetic
       if (value < 0)
         value += MODULUS;        //done properly
-      dir = (inT8) value;
+      dir = static_cast<int8_t>(value);
       return *this;
     }
-    inT8 operator- (             //subtraction
+    int8_t operator- (             //subtraction
       const DIR128 & minus) const//for signed result
     {
                                  //result
-      inT16 result = dir - minus.dir;
+      int16_t result = dir - minus.dir;
 
       if (result > MODULUS / 2)
         result -= MODULUS;       //get in range
       else if (result < -MODULUS / 2)
         result += MODULUS;
-      return (inT8) result;
+      return static_cast<int8_t>(result);
     }
     DIR128 operator+ (           //addition
       const DIR128 & add) const  //of itself
@@ -74,12 +73,11 @@ class DLLSYM DIR128
       *this = dir + add.dir;     //let = do the work
       return *this;
     }
-    inT8 get_dir() const {  //access function
+    int8_t get_dir() const {  //access function
       return dir;
     }
-    ICOORD vector() const;  //turn to vector
 
   private:
-    inT8 dir;                    //a direction
+    int8_t dir;                    //a direction
 };
 #endif

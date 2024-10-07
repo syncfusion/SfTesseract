@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        tprintf.c
+ * File:        tprintf.cpp
  * Description: Trace version of printf - portable between UX and NT
  * Author:      Phil Cheatle
- * Created:     Wed Jun 28 15:01:15 BST 1995
  *
  * (C) Copyright 1995, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,101 +16,53 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
-
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
 
-#include          <stdio.h>
-#include          <stdarg.h>
-#include          "strngs.h"
-#include          "params.h"
-#include          "tprintf.h"
-#include          "ccutil.h"
+#include <cstdio>
+#include <cstdarg>
+#include "params.h"
+#include "strngs.h"
+#include "tprintf.h"
 
-#define MAX_MSG_LEN     65536
+#define MAX_MSG_LEN 2048
 
-#define EXTERN
-// Since tprintf is protected by a mutex, these parameters can rmain global.
-DLLSYM STRING_VAR(debug_file, "", "File to send tprintf output to");
+static STRING_VAR(debug_file, "", "File to send tprintf output to");
 
-DLLSYM void
-tprintf (                        //Trace printf
-const char *format, ...          //special message
-) {
-  tesseract::tprintfMutex.Lock();
-  va_list args;                  //variable args
-  static FILE *debugfp = NULL;   //debug file
-                                 //debug window
-  inT32 offset = 0;              //into message
-  static char msg[MAX_MSG_LEN + 1];
+// Trace printf
+DLLSYM void tprintf(const char *format, ...)
+{
+  const char* debug_file_name = debug_file.string();
+  static FILE *debugfp = nullptr;   // debug file
 
-  va_start(args, format);  //variable list
-  #ifdef _WIN32
-                                 //Format into msg
-  offset += _vsnprintf (msg + offset, MAX_MSG_LEN - offset, format, args);
-  if (strcmp(debug_file.string(), "/dev/null") == 0)
-	  debug_file.set_value("nul");
-  #else
-                                 //Format into msg
-  offset += vsprintf (msg + offset, format, args);
-  #endif
-  va_end(args);
-
-  if (debugfp == NULL && strlen (debug_file.string ()) > 0) {
-    debugfp = fopen (debug_file.string (), "wb");
-  } else if (debugfp != NULL && strlen (debug_file.string ()) == 0) {
-    fclose(debugfp);
-    debugfp = NULL;
+  if (debug_file_name == nullptr) {
+    // This should not happen.
+    return;
   }
-  if (debugfp != NULL)
-    fprintf(debugfp, "%s", msg);
-  else
-    fprintf(stderr, "%s", msg);
-  tesseract::tprintfMutex.Unlock();
-}
 
+#ifdef _WIN32
+  // Replace /dev/null by nul for Windows.
+  if (strcmp(debug_file_name, "/dev/null") == 0) {
+    debug_file_name = "nul";
+    debug_file.set_value(debug_file_name);
+  }
+#endif
 
-/*************************************************************************
- * pause_continue()
- * UI for a debugging pause - to see an intermediate state
- * Returns TRUE to continue as normal to the next pause in the current mode;
- * FALSE to quit the current pausing mode.
- *************************************************************************/
+  if (debugfp == nullptr && debug_file_name[0] != '\0') {
+    debugfp = fopen(debug_file_name, "wb");
+  } else if (debugfp != nullptr && debug_file_name[0] == '\0') {
+    fclose(debugfp);
+    debugfp = nullptr;
+  }
 
-DLLSYM BOOL8
-                                 //special message
-pause_continue (const char *format, ...
-) {
-  va_list args;                  //variable args
-  char msg[1000];
-  STRING str = STRING ("DEBUG PAUSE:\n");
-
-  va_start(args, format);  //variable list
-  vsprintf(msg, format, args);  //Format into msg
+  va_list args;            // variable args
+  va_start(args, format);  // variable list
+  if (debugfp != nullptr) {
+    vfprintf(debugfp, format, args);
+  } else {
+    vfprintf(stderr, format, args);
+  }
   va_end(args);
-
-  #ifdef GRAPHICS_DISABLED
-  // No interaction allowed -> simply go on
-  return true;
-  #else
-
-  #ifdef __UNIX__
-  printf ("%s\n", msg);
-  printf ("Type \"c\" to cancel, anything else to continue: ");
-  char c = getchar ();
-  return (c != 'c');
-  #endif
-
-  #ifdef _WIN32
-  str +=
-    STRING (msg) + STRING ("\nUse OK to continue, CANCEL to stop pausing");
-  //   return AfxMessageBox( str.string(), MB_OKCANCEL ) == IDOK;
-  return::MessageBox (NULL, msg, "IMGAPP",
-    MB_APPLMODAL | MB_OKCANCEL) == IDOK;
-  #endif
-
-  #endif
 }

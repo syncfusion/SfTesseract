@@ -136,8 +136,8 @@ class TextlineProjection {
   // row 2 pixels above from the mean of the transformed row 2 pixels below.
   // This gives a positive value for a good top edge and negative for bottom.
   // Returns the best result out of +2/-2, +3/-1, +1/-3 pixels from the edge.
-  int BestMeanGradientInRow(const DENORM* denorm, inT16 min_x, inT16 max_x,
-                            inT16 y, bool best_is_max) const;
+  int BestMeanGradientInRow(const DENORM* denorm, int16_t min_x, int16_t max_x,
+                            int16_t y, bool best_is_max) const;
 
   // Helper returns the mean gradient value for the vertical column at the
   // given x, (in the external coordinates) by subtracting the mean of the
@@ -145,15 +145,15 @@ class TextlineProjection {
   // 2 pixels to the right.
   // This gives a positive value for a good left edge and negative for right.
   // Returns the best result out of +2/-2, +3/-1, +1/-3 pixels from the edge.
-  int BestMeanGradientInColumn(const DENORM* denorm, inT16 x, inT16 min_y,
-                               inT16 max_y, bool best_is_max) const;
+  int BestMeanGradientInColumn(const DENORM* denorm, int16_t x, int16_t min_y,
+                               int16_t max_y, bool best_is_max) const;
 
   // Helper returns the mean pixel value over the line between the start_pt and
   // end_pt (inclusive), but shifted perpendicular to the line in the projection
   // image by offset pixels. For simplicity, it is assumed that the vector is
   // either nearly horizontal or nearly vertical. It works on skewed textlines!
   // The end points are in external coordinates, and will be denormalized with
-  // the denorm if not NULL before further conversion to pix coordinates.
+  // the denorm if not nullptr before further conversion to pix coordinates.
   // After all the conversions, the offset is added to the direction
   // perpendicular to the line direction. The offset is thus in projection image
   // coordinates, which allows the caller to get a guaranteed displacement
@@ -177,7 +177,7 @@ class TextlineProjection {
   // the blob. Returns true if padding was in the horizontal direction.
   bool PadBlobBox(BLOBNBOX* blob, TBOX* bbox);
 
-  // Helper denormalizes the TPOINT with the denorm if not NULL, then
+  // Helper denormalizes the TPOINT with the denorm if not nullptr, then
   // converts to pix_ coordinates.
   void TransformToPixCoords(const DENORM* denorm, TPOINT* pt) const;
 

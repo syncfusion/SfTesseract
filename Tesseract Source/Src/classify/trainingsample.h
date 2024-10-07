@@ -13,8 +13,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TRAINING_TRAININGSAMPLE_H__
-#define TESSERACT_TRAINING_TRAININGSAMPLE_H__
+#ifndef TESSERACT_TRAINING_TRAININGSAMPLE_H_
+#define TESSERACT_TRAINING_TRAININGSAMPLE_H_
 
 #include "elst.h"
 #include "featdefs.h"
@@ -54,8 +54,8 @@ class TrainingSample : public ELIST_LINK {
  public:
   TrainingSample()
     : class_id_(INVALID_UNICHAR_ID), font_id_(0), page_num_(0),
-      num_features_(0), num_micro_features_(0),
-      features_(NULL), micro_features_(NULL), weight_(1.0),
+      num_features_(0), num_micro_features_(0), outline_length_(0),
+      features_(nullptr), micro_features_(nullptr), weight_(1.0),
       max_dist_(0.0), sample_index_(0),
       features_are_indexed_(false), features_are_mapped_(false),
       is_error_(false) {
@@ -65,8 +65,11 @@ class TrainingSample : public ELIST_LINK {
   // Saves the given features into a TrainingSample. The features are copied,
   // so may be deleted afterwards. Delete the return value after use.
   static TrainingSample* CopyFromFeatures(const INT_FX_RESULT_STRUCT& fx_info,
+                                          const TBOX& bounding_box,
                                           const INT_FEATURE_STRUCT* features,
                                           int num_features);
+  // Returns the cn_feature as a FEATURE_STRUCT* needed by cntraining.
+  FEATURE_STRUCT* GetCNFeature() const;
   // Constructs and returns a copy "randomized" by the method given by
   // the randomizer index. If index is out of [0, kSampleRandomSize) then
   // an exact copy is returned.
@@ -79,7 +82,7 @@ class TrainingSample : public ELIST_LINK {
   // It is assumed these can all be reconstructed from what is saved.
   // Writes to the given file. Returns false in case of error.
   bool Serialize(FILE* fp) const;
-  // Creates from the given file. Returns NULL in case of error.
+  // Creates from the given file. Returns nullptr in case of error.
   // If swap is true, assumes a big/little-endian swap is needed.
   static TrainingSample* DeSerializeCreate(bool swap, FILE* fp);
   // Reads from the given file. Returns false in case of error.
@@ -106,7 +109,7 @@ class TrainingSample : public ELIST_LINK {
   // Returns a pix of the original sample image. The pix is padded all round
   // by padding wherever possible.
   // The returned Pix must be pixDestroyed after use.
-  // If the input page_pix is NULL, NULL is returned.
+  // If the input page_pix is nullptr, nullptr is returned.
   Pix* GetSamplePix(int padding, Pix* page_pix) const;
 
   // Accessors.
@@ -134,17 +137,20 @@ class TrainingSample : public ELIST_LINK {
   void set_bounding_box(const TBOX& box) {
     bounding_box_ = box;
   }
-  int num_features() const {
+  uint32_t num_features() const {
     return num_features_;
   }
   const INT_FEATURE_STRUCT* features() const {
     return features_;
   }
-  int num_micro_features() const {
+  uint32_t num_micro_features() const {
     return num_micro_features_;
   }
   const MicroFeature* micro_features() const {
     return micro_features_;
+  }
+  int outline_length() const {
+    return outline_length_;
   }
   float cn_feature(int index) const {
     return cn_feature_[index];
@@ -200,9 +206,13 @@ class TrainingSample : public ELIST_LINK {
   // Bounding box of sample in original image.
   TBOX bounding_box_;
   // Number of INT_FEATURE_STRUCT in features_ array.
-  int num_features_;
+  uint32_t num_features_;
   // Number of MicroFeature in micro_features_ array.
-  int num_micro_features_;
+  uint32_t num_micro_features_;
+  // Total length of outline in the baseline normalized coordinate space.
+  // See comment in WERD_RES class definition for a discussion of coordinate
+  // spaces.
+  int outline_length_;
   // Array of features.
   INT_FEATURE_STRUCT* features_;
   // Array of features.
@@ -237,4 +247,4 @@ ELISTIZEH(TrainingSample)
 
 }  // namespace tesseract
 
-#endif  // TESSERACT_TRAINING_TRAININGSAMPLE_H__
+#endif  // TESSERACT_TRAINING_TRAININGSAMPLE_H_

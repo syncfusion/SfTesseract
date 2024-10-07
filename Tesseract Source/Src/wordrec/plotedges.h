@@ -1,14 +1,9 @@
 /* -*-C-*-
  ********************************************************************************
  *
- * File:        plotedges.h  (Formerly plotedges.h)
+ * File:         plotedges.h
  * Description:  Convert the various data type into line lists
  * Author:       Mark Seaman, OCR Technology
- * Created:      Fri Jul 28 13:14:48 1989
- * Modified:     Mon May 13 09:34:51 1991 (Mark Seaman) marks@hpgrlt
- * Language:     C
- * Package:      N/A
- * Status:       Experimental (Do Not Distribute)
  *
  * (c) Copyright 1989, Hewlett-Packard Company.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,13 +17,16 @@
  ** limitations under the License.
  *
  *********************************************************************************/
+
 #ifndef PLOTEDGES_H
 #define PLOTEDGES_H
 
-#include "callcpp.h"
-#include "oldlist.h"
-#include "blobs.h"
-#include "split.h"
+#include "oldlist.h"  // for LIST
+
+class ScrollView;
+
+struct EDGEPT;
+struct TBLOB;
 
 /*----------------------------------------------------------------------
               V a r i a b l e s
@@ -43,10 +41,10 @@ extern ScrollView *edge_window;        /* Window for edges */
  *
  * Refresh the display of the edge window.
  **********************************************************************/
-#define update_edge_window()             \
-if (wordrec_display_splits) {                  \
-	c_make_current (edge_window);      \
-}                                      \
+#define update_edge_window()    \
+if (wordrec_display_splits) {   \
+  c_make_current (edge_window); \
+}
 
 
 /**********************************************************************
@@ -67,5 +65,4 @@ void draw_blob_edges(TBLOB *blob);
 
 void mark_outline(EDGEPT *edgept);
 
-void mark_split(SPLIT *split);
 #endif

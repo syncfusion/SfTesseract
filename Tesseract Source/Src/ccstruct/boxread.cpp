@@ -2,7 +2,6 @@
  * File:        boxread.cpp
  * Description: Read data from a box file.
  * Author:      Ray Smith
- * Created:     Fri Aug 24 17:47:23 PDT 2007
  *
  * (C) Copyright 2007, Google Inc.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,35 +16,104 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
 #include "boxread.h"
-#include <string.h>
-
-#include "rect.h"
-#include "strngs.h"
-#include "tprintf.h"
-#include "unichar.h"
+#include <cstring>          // for strchr, strcmp, strrchr
+#include <locale>           // for std::locale::classic
+#include <sstream>          // for std::stringstream
+#include "errcode.h"        // for ERRCODE, TESSEXIT
+#include "fileerr.h"        // for CANTOPENFILE
+#include "genericvector.h"  // for GenericVector
+#include "helpers.h"        // for chomp_string
+#include "rect.h"           // for TBOX
+#include "strngs.h"         // for STRING
+#include "tprintf.h"        // for tprintf
+#include "unichar.h"        // for UNICHAR
 
 // Special char code used to identify multi-blob labels.
 static const char* kMultiBlobLabelCode = "WordStr";
 
 // Open the boxfile based on the given image filename.
 FILE* OpenBoxFile(const STRING& fname) {
-  STRING filename = fname;
-  const char *lastdot = strrchr(filename.string(), '.');
-  if (lastdot != NULL)
-    filename[lastdot - filename.string()] = '\0';
-
-  filename += ".box";
-  FILE* box_file = NULL;
+  STRING filename = BoxFileName(fname);
+  FILE* box_file = nullptr;
   if (!(box_file = fopen(filename.string(), "rb"))) {
-    CANTOPENFILE.error("read_next_box", TESSEXIT,
-                       "Cant open box file %s",
+    CANTOPENFILE.error("read_next_box", TESSEXIT, "Can't open box file %s",
                        filename.string());
   }
   return box_file;
 }
 
+// Reads all boxes from the given filename.
+// Reads a specific target_page number if >= 0, or all pages otherwise.
+// Skips blanks if skip_blanks is true.
+// The UTF-8 label of the box is put in texts, and the full box definition as
+// a string is put in box_texts, with the corresponding page number in pages.
+// Each of the output vectors is optional (may be nullptr).
+// Returns false if no boxes are found.
+bool ReadAllBoxes(int target_page, bool skip_blanks, const STRING& filename,
+                  GenericVector<TBOX>* boxes,
+                  GenericVector<STRING>* texts,
+                  GenericVector<STRING>* box_texts,
+                  GenericVector<int>* pages) {
+  GenericVector<char> box_data;
+  if (!tesseract::LoadDataFromFile(BoxFileName(filename).c_str(), &box_data))
+    return false;
+  // Convert the array of bytes to a string, so it can be used by the parser.
+  box_data.push_back('\0');
+  return ReadMemBoxes(target_page, skip_blanks, &box_data[0],
+                      /*continue_on_failure*/ true, boxes, texts, box_texts,
+                      pages);
+}
+
+// Reads all boxes from the string. Otherwise, as ReadAllBoxes.
+bool ReadMemBoxes(int target_page, bool skip_blanks, const char* box_data,
+                  bool continue_on_failure,
+                  GenericVector<TBOX>* boxes,
+                  GenericVector<STRING>* texts,
+                  GenericVector<STRING>* box_texts,
+                  GenericVector<int>* pages) {
+  STRING box_str(box_data);
+  GenericVector<STRING> lines;
+  box_str.split('\n', &lines);
+  if (lines.empty()) return false;
+  int num_boxes = 0;
+  for (int i = 0; i < lines.size(); ++i) {
+    int page = 0;
+    STRING utf8_str;
+    TBOX box;
+    if (!ParseBoxFileStr(lines[i].string(), &page, &utf8_str, &box)) {
+      if (continue_on_failure)
+        continue;
+      else
+        return false;
+    }
+    if (skip_blanks && (utf8_str == " " || utf8_str == "\t")) continue;
+    if (target_page >= 0 && page != target_page) continue;
+    if (boxes != nullptr) boxes->push_back(box);
+    if (texts != nullptr) texts->push_back(utf8_str);
+    if (box_texts != nullptr) {
+      STRING full_text;
+      MakeBoxFileStr(utf8_str.string(), box, target_page, &full_text);
+      box_texts->push_back(full_text);
+    }
+    if (pages != nullptr) pages->push_back(page);
+    ++num_boxes;
+  }
+  return num_boxes > 0;
+}
+
+// Returns the box file name corresponding to the given image_filename.
+STRING BoxFileName(const STRING& image_filename) {
+  STRING box_filename = image_filename;
+  const char *lastdot = strrchr(box_filename.string(), '.');
+  if (lastdot != nullptr)
+    box_filename.truncate_at(lastdot - box_filename.string());
+
+  box_filename += ".box";
+  return box_filename;
+}
+
+// TODO(rays) convert all uses of ReadNextBox to use the new ReadAllBoxes.
 // Box files are used ONLY DURING TRAINING, but by both processes of
 // creating tr files with tesseract, and unicharset_extractor.
 // ReadNextBox factors out the code to interpret a line of a box
@@ -74,12 +142,13 @@ bool ReadNextBox(int target_page, int *line_number, FILE* box_file,
     (*line_number)++;
 
     buffptr = buff;
-    const unsigned char *ubuf = reinterpret_cast<const unsigned char*>(buffptr);
+    const auto *ubuf = reinterpret_cast<const unsigned char*>(buffptr);
     if (ubuf[0] == 0xef && ubuf[1] == 0xbb && ubuf[2] == 0xbf)
       buffptr += 3;  // Skip unicode file designation.
     // Check for blank lines in box file
-    while (*buffptr == ' ' || *buffptr == '\t')
-      buffptr++;
+    if (*buffptr == '\n' || *buffptr == '\0') continue;
+    // Skip blank boxes.
+    if (*buffptr == ' ' || *buffptr == '\t') continue;
     if (*buffptr != '\0') {
       if (!ParseBoxFileStr(buffptr, &page, utf8_str, bounding_box)) {
         tprintf("Box file format error on line %i; ignored\n", *line_number);
@@ -113,31 +182,47 @@ bool ParseBoxFileStr(const char* boxfile_str, int* page_number,
   // as whitespace by sscanf, so it is more reliable to just find
   // ascii space and tab.
   int uch_len = 0;
-  while (*buffptr != '\0' && *buffptr != ' ' && *buffptr != '\t' &&
-         uch_len < kBoxReadBufSize - 1) {
+  // Skip unicode file designation, if present.
+  const auto *ubuf = reinterpret_cast<const unsigned char*>(buffptr);
+  if (ubuf[0] == 0xef && ubuf[1] == 0xbb && ubuf[2] == 0xbf)
+      buffptr += 3;
+  // Allow a single blank as the UTF-8 string. Check for empty string and
+  // then blindly eat the first character.
+  if (*buffptr == '\0') return false;
+  do {
     uch[uch_len++] = *buffptr++;
-  }
+  } while (*buffptr != '\0' && *buffptr != ' ' && *buffptr != '\t' &&
+           uch_len < kBoxReadBufSize - 1);
   uch[uch_len] = '\0';
   if (*buffptr != '\0') ++buffptr;
-  int x_min, y_min, x_max, y_max;
+  int x_min = INT_MAX;
+  int y_min = INT_MAX;
+  int x_max = INT_MIN;
+  int y_max = INT_MIN;
   *page_number = 0;
-  int count = sscanf(buffptr, "%d %d %d %d %d",
-                 &x_min, &y_min, &x_max, &y_max, page_number);
-  if (count != 5 && count != 4) {
-    tprintf("Bad box coordinates in boxfile string!\n");
+  std::stringstream stream(buffptr);
+  stream.imbue(std::locale::classic());
+  stream >> x_min;
+  stream >> y_min;
+  stream >> x_max;
+  stream >> y_max;
+  stream >> *page_number;
+  if (x_max < x_min || y_max < y_min) {
+    tprintf("Bad box coordinates in boxfile string! %s\n", ubuf);
     return false;
   }
   // Test for long space-delimited string label.
   if (strcmp(uch, kMultiBlobLabelCode) == 0 &&
-      (buffptr = strchr(buffptr, '#')) != NULL) {
-    strncpy(uch, buffptr + 1, kBoxReadBufSize);
+      (buffptr = strchr(buffptr, '#')) != nullptr) {
+    strncpy(uch, buffptr + 1, kBoxReadBufSize - 1);
+    uch[kBoxReadBufSize - 1] = '\0';  // Prevent buffer overrun.
     chomp_string(uch);
     uch_len = strlen(uch);
   }
   // Validate UTF8 by making unichars with it.
   int used = 0;
   while (used < uch_len) {
-    UNICHAR ch(uch + used, uch_len - used);
+    tesseract::UNICHAR ch(uch + used, uch_len - used);
     int new_used = ch.utf8_len();
     if (new_used == 0) {
       tprintf("Bad UTF-8 str %s starts with 0x%02x at col %d\n",
@@ -147,6 +232,8 @@ bool ParseBoxFileStr(const char* boxfile_str, int* page_number,
     used += new_used;
   }
   *utf8_str = uch;
+  if (x_min > x_max) Swap(&x_min, &x_max);
+  if (y_min > y_max) Swap(&y_min, &y_max);
   bounding_box->set_to_given_coords(x_min, y_min, x_max, y_max);
   return true;  // Successfully read a box.
 }
@@ -161,4 +248,3 @@ void MakeBoxFileStr(const char* unichar_str, const TBOX& box, int page_num,
   box_str->add_str_int(" ", box.top());
   box_str->add_str_int(" ", page_num);
 }
-

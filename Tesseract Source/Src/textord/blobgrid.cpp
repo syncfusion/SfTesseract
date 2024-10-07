@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////
-// File:        blobgrid.h
+// File:        blobgrid.cpp
 // Description: BBGrid of BLOBNBOX with useful BLOBNBOX-specific methods.
 // Copyright 2011 Google Inc. All Rights Reserved.
 // Author: rays@google.com (Ray Smith)
@@ -25,8 +25,10 @@ BlobGrid::BlobGrid(int gridsize, const ICOORD& bleft, const ICOORD& tright)
   : BBGrid<BLOBNBOX, BLOBNBOX_CLIST, BLOBNBOX_C_IT>(gridsize, bleft, tright) {
 }
 
-BlobGrid::~BlobGrid() {
-}
+// Destructor.
+// It is defined here, so the compiler can create a single vtable
+// instead of weak vtables in every compilation unit.
+BlobGrid::~BlobGrid() = default;
 
 // Inserts all the blobs from the given list, with x and y spreading,
 // without removing from the source list, so ownership remains with the
@@ -39,6 +41,5 @@ void BlobGrid::InsertBlobList(BLOBNBOX_LIST* blobs) {
       InsertBBox(true, true, blob);
   }
 }
-
 
 }  // namespace tesseract.

@@ -18,8 +18,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_COLPARTITIONSET_H__
-#define TESSERACT_TEXTORD_COLPARTITIONSET_H__
+#ifndef TESSERACT_TEXTORD_COLPARTITIONSET_H_
+#define TESSERACT_TEXTORD_COLPARTITIONSET_H_
 
 #include "colpartition.h"   // For ColPartition_LIST.
 #include "genericvector.h"  // For GenericVector.
@@ -31,7 +31,7 @@ namespace tesseract {
 class WorkingPartSet_LIST;
 class ColSegment_LIST;
 class ColPartitionSet;
-typedef GenericVector<ColPartitionSet*> PartSetVector;
+using PartSetVector = GenericVector<ColPartitionSet*>;
 
 // ColPartitionSet is a class that holds a list of ColPartitions.
 // Its main use is in holding a candidate partitioning of the width of the
@@ -39,28 +39,30 @@ typedef GenericVector<ColPartitionSet*> PartSetVector;
 // ColPartitionSets are used in building the column layout of a page.
 class ColPartitionSet : public ELIST_LINK {
  public:
-  ColPartitionSet() {
-  }
+  ColPartitionSet() = default;
   explicit ColPartitionSet(ColPartition_LIST* partitions);
   explicit ColPartitionSet(ColPartition* partition);
 
-  ~ColPartitionSet();
+  ~ColPartitionSet() = default;
 
   // Simple accessors.
   const TBOX& bounding_box() const {
     return bounding_box_;
   }
-  bool Empty() {
+  bool Empty() const {
     return parts_.empty();
   }
-  int ColumnCount() {
+  int ColumnCount() const {
     return parts_.length();
   }
+
+  // Returns the number of columns of good width.
+  int GoodColumnCount() const;
 
   // Return an element of the parts_ list from its index.
   ColPartition* GetColumnByIndex(int index);
 
-  // Return the ColPartition that contains the given coords, if any, else NULL.
+  // Return the ColPartition that contains the given coords, if any, else nullptr.
   ColPartition* ColumnContaining(int x, int y);
 
   // Return the bounding boxes of columns at the given y-range
@@ -99,12 +101,12 @@ class ColPartitionSet : public ELIST_LINK {
   // by the given coords(left,right,y), with the given margins.
   // Also return the first and last column index touched by the coords and
   // the leftmost spanned column.
-  // Column indices are 2n + 1 for real colums (0 based) and even values
+  // Column indices are 2n + 1 for real columns (0 based) and even values
   // represent the gaps in between columns, with 0 being left of the leftmost.
   // resolution refers to the ppi resolution of the image. It may be 0 if only
   // the first_col and last_col are required.
   ColumnSpanningType SpanningType(int resolution,
-                                  int left, int right, int y,
+                                  int left, int right, int height, int y,
                                   int left_margin, int right_margin,
                                   int* first_col, int* last_col,
                                   int* first_spanned_col);
@@ -134,7 +136,7 @@ class ColPartitionSet : public ELIST_LINK {
   // Coverage is split into good and bad. Good coverage is provided by
   // ColPartitions of a frequent width (according to the callback function
   // provided by TabFinder::WidthCB, which accesses stored statistics on the
-  // widths of ColParititions) and bad coverage is provided by all other
+  // widths of ColPartitions) and bad coverage is provided by all other
   // ColPartitions, even if they have tab vectors at both sides. Thus:
   // |-----------------------------------------------------------------|
   // |        Double     width    heading                              |
@@ -167,4 +169,4 @@ ELISTIZEH(ColPartitionSet)
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_TEXTORD_COLPARTITION_H__
+#endif  // TESSERACT_TEXTORD_COLPARTITION_H_

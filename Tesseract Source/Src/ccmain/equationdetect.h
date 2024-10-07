@@ -2,7 +2,6 @@
 // File:        equationdetect.h
 // Description: The equation detection class that inherits equationdetectbase.
 // Author:      Zongyi (Joe) Liu (joeliu@google.com)
-// Created:     Fri Aug 31 11:13:01 PST 2011
 //
 // (C) Copyright 2011, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +16,15 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_CCMAIN_EQUATIONDETECT_H__
-#define TESSERACT_CCMAIN_EQUATIONDETECT_H__
+#ifndef TESSERACT_CCMAIN_EQUATIONDETECT_H_
+#define TESSERACT_CCMAIN_EQUATIONDETECT_H_
 
-#include "blobbox.h"
-#include "equationdetectbase.h"
-#include "genericvector.h"
-#include "unichar.h"
+#include "blobbox.h"             // for BLOBNBOX (ptr only), BlobSpecialText...
+#include "equationdetectbase.h"  // for EquationDetectBase
+#include "genericvector.h"       // for GenericVector
+#include "tesseractclass.h"      // for Tesseract
+#include "unichar.h"             // for UNICHAR_ID
 
-class BLOBNBOX;
-class BLOB_CHOICE;
-class BLOB_CHOICE_LIST;
-class TO_BLOCK_LIST;
 class TBOX;
 class UNICHARSET;
 
@@ -43,7 +39,7 @@ class EquationDetect : public EquationDetectBase {
  public:
   EquationDetect(const char* equ_datapath,
                  const char* equ_language);
-  ~EquationDetect();
+  ~EquationDetect() override;
 
   enum IndentType {
     NO_INDENT,
@@ -60,13 +56,13 @@ class EquationDetect : public EquationDetectBase {
   // Iterate over the blobs inside to_block, and set the blobs that we want to
   // process to BSTT_NONE. (By default, they should be BSTT_SKIP). The function
   // returns 0 upon success.
-  int LabelSpecialText(TO_BLOCK* to_block);
+  int LabelSpecialText(TO_BLOCK* to_block) override;
 
   // Find possible equation partitions from part_grid. Should be called
   // after the special_text_type of blobs are set.
   // It returns 0 upon success.
   int FindEquationParts(ColPartitionGrid* part_grid,
-                        ColPartitionSet** best_columns);
+                        ColPartitionSet** best_columns) override;
 
   // Reset the resolution of the processing image. TEST only function.
   void SetResolution(const int resolution);
@@ -135,10 +131,10 @@ class EquationDetect : public EquationDetectBase {
   bool CheckSeedFgDensity(const float density_th, ColPartition* part);
 
   // A light version of SplitCPHor: instead of really doing the part split, we
-  // simply compute the union bounding box of each splitted part.
+  // simply compute the union bounding box of each split part.
   void SplitCPHorLite(ColPartition* part, GenericVector<TBOX>* splitted_boxes);
 
-  // Split the part (horizontally), and save the splitted result into
+  // Split the part (horizontally), and save the split result into
   // parts_splitted. Note that it is caller's responsibility to release the
   // memory owns by parts_splitted. On the other hand, the part is unchanged
   // during this process and still owns the blobs, so do NOT call DeleteBoxes
@@ -158,7 +154,7 @@ class EquationDetect : public EquationDetectBase {
   // Identify inline partitions from cp_seeds_, and re-label them.
   void IdentifyInlineParts();
 
-  // Comute the super bounding box for all colpartitions inside part_grid_.
+  // Compute the super bounding box for all colpartitions inside part_grid_.
   void ComputeCPsSuperBBox();
 
   // Identify inline partitions from cp_seeds_ using the horizontal search.
@@ -184,7 +180,7 @@ class EquationDetect : public EquationDetectBase {
   bool ExpandSeed(ColPartition* seed);
 
   // Starting from the seed position, we search the part_grid_
-  // horizontally/vertically, find all parititions that can be
+  // horizontally/vertically, find all partitions that can be
   // merged with seed, remove them from part_grid_, and put them  into
   // parts_to_merge.
   void ExpandSeedHorizontal(const bool search_left,
@@ -219,7 +215,7 @@ class EquationDetect : public EquationDetectBase {
 
   // Search the nearest neighbor of part in one vertical direction as defined in
   // search_bottom. It returns the neighbor found that major x overlap with it,
-  // or NULL when not found.
+  // or nullptr when not found.
   ColPartition* SearchNNVertical(const bool search_bottom,
                                  const ColPartition* part);
 
@@ -243,8 +239,8 @@ class EquationDetect : public EquationDetectBase {
   // ColPartition object.
   void PrintSpecialBlobsDensity(const ColPartition* part) const;
 
-  // The tesseract engine intialized from equation training data.
-  Tesseract* equ_tesseract_;
+  // The tesseract engine initialized from equation training data.
+  Tesseract equ_tesseract_;
 
   // The tesseract engine used for OCR. This pointer is passed in by the caller,
   // so do NOT destroy it in this class.
@@ -252,12 +248,12 @@ class EquationDetect : public EquationDetectBase {
 
   // The ColPartitionGrid that we are processing. This pointer is passed in from
   // the caller, so do NOT destroy it in the class.
-  ColPartitionGrid* part_grid_;
+  ColPartitionGrid* part_grid_ = nullptr;
 
   // A simple array of pointers to the best assigned column division at
   // each grid y coordinate. This pointer is passed in from the caller, so do
   // NOT destroy it in the class.
-  ColPartitionSet** best_columns_;
+  ColPartitionSet** best_columns_ = nullptr;
 
   // The super bounding box of all cps in the part_grid_.
   TBOX* cps_super_bbox_;

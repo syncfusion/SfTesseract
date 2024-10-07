@@ -31,7 +31,7 @@ namespace tesseract {
 class CCNonTextDetect : public BlobGrid {
  public:
   CCNonTextDetect(int gridsize, const ICOORD& bleft, const ICOORD& tright);
-  virtual ~CCNonTextDetect();
+  ~CCNonTextDetect() override;
 
   // Creates and returns a Pix with the same resolution as the original
   // in which 1 (black) pixels represent likely non text (photo, line drawing)
@@ -66,7 +66,7 @@ class CCNonTextDetect : public BlobGrid {
   // WARNING: The blobs list blobs may be in the *this grid, but they are
   // not removed. If any deleted blobs might be in *this, then this must be
   // Clear()ed immediately after MarkAndDeleteNonTextBlobs is called.
-  // If the win is not NULL, deleted blobs are drawn on it in red, and kept
+  // If the win is not nullptr, deleted blobs are drawn on it in red, and kept
   void MarkAndDeleteNonTextBlobs(BLOBNBOX_LIST* blobs,
                                  int max_blob_overlaps,
                                  ScrollView* win, ScrollView::Color ok_color,

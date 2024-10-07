@@ -1,8 +1,8 @@
 /**********************************************************************
- * File:        getopt.c
+ * File:        tessopt.cpp
  * Description: Re-implementation of the unix code.
- * Author:					Ray Smith
- * Created:					Tue Nov 28 05:52:50 MST 1995
+ * Author:      Ray Smith
+ * Created:     Tue Nov 28 05:52:50 MST 1995
  *
  * (C) Copyright 1995, Hewlett-Packard Co.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,11 +17,9 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
-#include          <string.h>
-#include          <stdio.h>
-#include          "tessopt.h"
-#include          "notdll.h"     //must be last include
+#include <cstring>
+#include <cstdio>
+#include "tessopt.h"
 
 int tessoptind;
 char *tessoptarg;
@@ -33,7 +31,7 @@ char *tessoptarg;
  **********************************************************************/
 
 int tessopt (                         //parse args
-inT32 argc,                      //arg count
+int32_t argc,                      //arg count
 char *argv[],                    //args
 const char *arglist                    //string of arg chars
 ) {
@@ -43,7 +41,7 @@ const char *arglist                    //string of arg chars
     tessoptind = 1;
   if (tessoptind < argc && argv[tessoptind][0] == '-') {
     arg = strchr (arglist, argv[tessoptind][1]);
-    if (arg == NULL || *arg == ':')
+    if (arg == nullptr || *arg == ':')
       return '?';                //dud option
     tessoptind++;
     tessoptarg = argv[tessoptind];

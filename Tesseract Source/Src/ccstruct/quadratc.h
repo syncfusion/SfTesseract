@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        quadratc.h  (Formerly quadrtic.h)
  * Description: Code for the QUAD_COEFFS class.
- * Author:		Ray Smith
- * Created:		Tue Oct 08 17:24:40 BST 1991
+ * Author:      Ray Smith
+ * Created:     Tue Oct 08 17:24:40 BST 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,16 +17,15 @@
  *
  **********************************************************************/
 
-#ifndef           QUADRATC_H
-#define           QUADRATC_H
+#ifndef QUADRATC_H
+#define QUADRATC_H
 
-#include          "points.h"
+#include "points.h"
 
 class QUAD_COEFFS
 {
   public:
-    QUAD_COEFFS() {
-    }                            //empty constructor
+    QUAD_COEFFS() = default;
     QUAD_COEFFS(             //constructor
                 double xsq,  //coefficients
                 float x,
@@ -38,7 +37,7 @@ class QUAD_COEFFS
 
     float y(                  //evaluate
             float x) const {  //at x
-      return (float) ((a * x + b) * x + c);
+      return static_cast<float>((a * x + b) * x + c);
     }
 
     void move(               // reposition word
@@ -48,11 +47,11 @@ class QUAD_COEFFS
         y - q = ax^2 - 2apx + ap^2 + bx - bp + c
           y = ax^2 + (b - 2ap)x + (c - bp + ap^2 + q)
       ************************************************************/
-      inT16 p = vec.x ();
-      inT16 q = vec.y ();
+      int16_t p = vec.x ();
+      int16_t q = vec.y ();
 
-      c = (float) (c - b * p + a * p * p + q);
-      b = (float) (b - 2 * a * p);
+      c = static_cast<float>(c - b * p + a * p * p + q);
+      b = static_cast<float>(b - 2 * a * p);
     }
 
     double a;                    //x squared

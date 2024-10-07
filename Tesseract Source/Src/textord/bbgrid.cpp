@@ -3,7 +3,6 @@
 // Description: Class to hold BLOBNBOXs in a grid for fast access
 //              to neighbours.
 // Author:      Ray Smith
-// Created:     Wed Jun 06 17:22:01 PDT 2007
 //
 // (C) Copyright 2007, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -27,15 +26,14 @@ namespace tesseract {
 ///////////////////////////////////////////////////////////////////////
 // BBGrid IMPLEMENTATION.
 ///////////////////////////////////////////////////////////////////////
-GridBase::GridBase() {
-}
-
 GridBase::GridBase(int gridsize, const ICOORD& bleft, const ICOORD& tright) {
   Init(gridsize, bleft, tright);
 }
 
-GridBase::~GridBase() {
-}
+// Destructor.
+// It is defined here, so the compiler can create a single vtable
+// instead of weak vtables in every compilation unit.
+GridBase::~GridBase() = default;
 
 // (Re)Initialize the grid. The gridsize is the size in pixels of each cell,
 // and bleft, tright are the bounding box of everything to go in it.
@@ -64,25 +62,23 @@ void GridBase::ClipGridCoords(int* x, int* y) const {
 }
 
 IntGrid::IntGrid() {
-  grid_ = NULL;
+  grid_ = nullptr;
 }
 
 IntGrid::IntGrid(int gridsize, const ICOORD& bleft, const ICOORD& tright)
-  : grid_(NULL) {
+  : grid_(nullptr) {
   Init(gridsize, bleft, tright);
 }
 
 IntGrid::~IntGrid() {
-  if (grid_ != NULL)
-    delete [] grid_;
+  delete [] grid_;
 }
 
 // (Re)Initialize the grid. The gridsize is the size in pixels of each cell,
 // and bleft, tright are the bounding box of everything to go in it.
 void IntGrid::Init(int gridsize, const ICOORD& bleft, const ICOORD& tright) {
   GridBase::Init(gridsize, bleft, tright);
-  if (grid_ != NULL)
-    delete [] grid_;
+  delete [] grid_;
   grid_ = new int[gridbuckets_];
   Clear();
 }
@@ -103,13 +99,13 @@ void IntGrid::Clear() {
 void IntGrid::Rotate(const FCOORD& rotation) {
   ASSERT_HOST(rotation.x() == 0.0f || rotation.y() == 0.0f);
   ICOORD old_bleft(bleft());
-  ICOORD old_tright(tright());
+  //ICOORD old_tright(tright());
   int old_width = gridwidth();
   int old_height = gridheight();
   TBOX box(bleft(), tright());
   box.rotate(rotation);
   int* old_grid = grid_;
-  grid_ = NULL;
+  grid_ = nullptr;
   Init(gridsize(), box.botleft(), box.topright());
   // Iterate over the old grid, copying data to the rotated position in the new.
   int oldi = 0;
@@ -134,7 +130,7 @@ void IntGrid::Rotate(const FCOORD& rotation) {
 // For ease of implementation, edge cells are double counted, to make them
 // have the same range as the non-edge cells.
 IntGrid* IntGrid::NeighbourhoodSum() const {
-  IntGrid* sumgrid = new IntGrid(gridsize(), bleft(), tright());
+  auto* sumgrid = new IntGrid(gridsize(), bleft(), tright());
   for (int y = 0; y < gridheight(); ++y) {
     for (int x = 0; x < gridwidth(); ++x) {
       int cell_count = 0;
@@ -154,7 +150,7 @@ IntGrid* IntGrid::NeighbourhoodSum() const {
 }
 
 // Returns true if more than half the area of the rect is covered by grid
-// cells that are over the theshold.
+// cells that are over the threshold.
 bool IntGrid::RectMostlyOverThreshold(const TBOX& rect, int threshold) const {
   int min_x, min_y, max_x, max_y;
   GridCoords(rect.left(), rect.bottom(), &min_x, &min_y);
@@ -201,7 +197,7 @@ Pix* IntGrid::ThresholdToPix(int threshold) const {
           GridCellValue(x - 1, y) > 0 && GridCellValue(x + 1, y) > 0 &&
               GridCellValue(x, y - 1) > 0 && GridCellValue(x, y + 1) > 0) {
         pixRasterop(pix, x * cellsize, tright().y() - ((y + 1) * cellsize),
-                    cellsize, cellsize, PIX_SET, NULL, 0, 0);
+                    cellsize, cellsize, PIX_SET, nullptr, 0, 0);
       }
     }
   }
@@ -209,8 +205,8 @@ Pix* IntGrid::ThresholdToPix(int threshold) const {
 }
 
 // Make a Pix of the correct scaled size for the TraceOutline functions.
-Pix* GridReducedPix(const TBOX& box, int gridsize,
-                    ICOORD bleft, int* left, int* bottom) {
+static Pix* GridReducedPix(const TBOX& box, int gridsize,
+                           ICOORD bleft, int* left, int* bottom) {
   // Compute grid bounds of the outline and pad all round by 1.
   int grid_left = (box.left() - bleft.x()) / gridsize - 1;
   int grid_bottom = (box.bottom() - bleft.y()) / gridsize - 1;
@@ -231,7 +227,7 @@ Pix* GridReducedPix(const TBOX& box, int gridsize,
 // Note that the Pix is used upside-down, with (0, 0) being the bottom-left.
 Pix* TraceOutlineOnReducedPix(C_OUTLINE* outline, int gridsize,
                               ICOORD bleft, int* left, int* bottom) {
-  TBOX box = outline->bounding_box();
+  const TBOX& box = outline->bounding_box();
   Pix* pix = GridReducedPix(box, gridsize, bleft, left, bottom);
   int wpl = pixGetWpl(pix);
   l_uint32* data = pixGetData(pix);
@@ -257,11 +253,11 @@ Pix* TraceOutlineOnReducedPix(C_OUTLINE* outline, int gridsize,
 // As TraceOutlineOnReducedPix above, but on a BLOCK instead of a C_OUTLINE.
 Pix* TraceBlockOnReducedPix(BLOCK* block, int gridsize,
                             ICOORD bleft, int* left, int* bottom) {
-  TBOX box = block->bounding_box();
+  const TBOX& box = block->pdblk.bounding_box();
   Pix* pix = GridReducedPix(box, gridsize, bleft, left, bottom);
   int wpl = pixGetWpl(pix);
   l_uint32* data = pixGetData(pix);
-  ICOORDELT_IT it(block->poly_block()->points());
+  ICOORDELT_IT it(block->pdblk.poly_block()->points());
   for (it.mark_cycle_pt(); !it.cycled_list();) {
     ICOORD pos = *it.data();
     it.forward();

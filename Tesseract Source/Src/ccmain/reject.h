@@ -1,8 +1,8 @@
 /**********************************************************************
- * File:        reject.h  (Formerly reject.h)
+ * File:        reject.h
  * Description: Rejection functions used in tessedit
- * Author:		Phil Cheatle
- * Created:		Wed Sep 23 16:50:21 BST 1992
+ * Author:      Phil Cheatle
+ * Created:     Wed Sep 23 16:50:21 BST 1992
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,19 +17,19 @@
  *
  **********************************************************************/
 
-#ifndef           REJECT_H
-#define           REJECT_H
+#ifndef REJECT_H
+#define REJECT_H
 
-#include          "params.h"
-#include          "pageres.h"
-#include          "notdll.h"
+class WERD_CHOICE;
+class WERD_RES;
 
 void reject_blanks(WERD_RES *word);
-void reject_poor_matches(WERD_RES *word, BLOB_CHOICE_LIST_CLIST *blob_choices);
-float compute_reject_threshold(BLOB_CHOICE_LIST_CLIST *blob_choices);
-BOOL8 word_contains_non_1_digit(const char *word, const char *word_lengths);
+void reject_poor_matches(WERD_RES *word);
+float compute_reject_threshold(WERD_CHOICE* word);
+bool word_contains_non_1_digit(const char* word, const char* word_lengths);
 void dont_allow_1Il(WERD_RES *word);
 void flip_hyphens(WERD_RES *word);
 void flip_0O(WERD_RES *word);
-BOOL8 non_0_digit(const char* str, int length);
+bool non_0_digit(const char* str, int length);
+
 #endif

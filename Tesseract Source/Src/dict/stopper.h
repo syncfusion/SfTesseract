@@ -1,10 +1,10 @@
 /******************************************************************************
- **	Filename:    stopper.h
- **	Purpose:     Stopping criteria for word classifier.
- **	Author:      Dan Johnson
- **	History:     Wed May  1 09:42:57 1991, DSJ, Created.
+ ** Filename:    stopper.h
+ ** Purpose:     Stopping criteria for word classifier.
+ ** Author:      Dan Johnson
+ ** History:     Wed May  1 09:42:57 1991, DSJ, Created.
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -18,68 +18,33 @@
 #ifndef   STOPPER_H
 #define   STOPPER_H
 
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
           Include Files and Type Defines
-----------------------------------------------------------------------------**/
+----------------------------------------------------------------------------*/
 
 #include "genericvector.h"
 #include "params.h"
-#include "states.h"
+#include "ratngs.h"
 #include "unichar.h"
 
 class WERD_CHOICE;
 
-typedef uinT8 BLOB_WIDTH;
+using BLOB_WIDTH = uint8_t;
 
 struct DANGERR_INFO {
   DANGERR_INFO() :
-    begin(-1), end(-1), dangerous(false), correct_is_ngram(false) {}
-  DANGERR_INFO(int b, int e, bool d, bool n) :
-    begin(b), end(e), dangerous(d), correct_is_ngram(n) {}
+    begin(-1), end(-1), dangerous(false), correct_is_ngram(false),
+    leftmost(INVALID_UNICHAR_ID) {}
+  DANGERR_INFO(int b, int e, bool d, bool n, UNICHAR_ID l) :
+    begin(b), end(e), dangerous(d), correct_is_ngram(n), leftmost(l) {}
   int begin;
   int end;
   bool dangerous;
   bool correct_is_ngram;
+  UNICHAR_ID leftmost;   // in the replacement, what's the leftmost character?
 };
 
-typedef GenericVector<DANGERR_INFO> DANGERR;
+using DANGERR = GenericVector<DANGERR_INFO>;
 
-enum ACCEPTABLE_CHOICE_CALLER { CHOPPER_CALLER, ASSOCIATOR_CALLER };
-
-struct CHAR_CHOICE {
-  UNICHAR_ID Class;
-  uinT16 NumChunks;
-  float Certainty;
-};
-
-class VIABLE_CHOICE_STRUCT {
- public:
-  VIABLE_CHOICE_STRUCT();
-  explicit VIABLE_CHOICE_STRUCT(int length);
-  ~VIABLE_CHOICE_STRUCT();
-
-  // Fill in the data with these values.
-  void Init(const WERD_CHOICE& word_choice,
-            const PIECES_STATE& pieces_state,
-            const float certainties[],
-            FLOAT32 adjust_factor);
-
-  int Length;
-  float Rating;
-  float Certainty;
-  FLOAT32 AdjustFactor;
-  bool ComposedFromCharFragments;
-  CHAR_CHOICE *Blob;
-
- private:
-  // Disallow assignment and copy construction
-  VIABLE_CHOICE_STRUCT(const VIABLE_CHOICE_STRUCT &other)
-      : Length(0), Blob(NULL) {}
-  VIABLE_CHOICE_STRUCT &operator=(const VIABLE_CHOICE_STRUCT &other) {
-    return *this;
-  }
-};
-
-typedef VIABLE_CHOICE_STRUCT *VIABLE_CHOICE;
 
 #endif

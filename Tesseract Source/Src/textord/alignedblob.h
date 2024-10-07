@@ -18,8 +18,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_ALIGNEDBLOB_H__
-#define TESSERACT_TEXTORD_ALIGNEDBLOB_H__
+#ifndef TESSERACT_TEXTORD_ALIGNEDBLOB_H_
+#define TESSERACT_TEXTORD_ALIGNEDBLOB_H_
 
 #include "bbgrid.h"
 #include "blobbox.h"
@@ -29,8 +29,6 @@
 extern INT_VAR_H(textord_debug_bugs, 0,
                  "Turn on output related to bugs in tab finding");
 extern INT_VAR_H(textord_debug_tabfind, 2, "Debug tab finding");
-extern BOOL_VAR_H(textord_debug_images, false,
-                "Use greyed image background for debug");
 extern BOOL_VAR_H(textord_debug_printable, false,
                   "Make debug windows printable");
 
@@ -83,7 +81,7 @@ struct AlignedBlobParams {
 class AlignedBlob : public BlobGrid {
  public:
   AlignedBlob(int gridsize, const ICOORD& bleft, const ICOORD& tright);
-  virtual ~AlignedBlob();
+  ~AlignedBlob() override;
 
   // Return true if the given coordinates are within the test rectangle
   // and the debug level is at least the given detail level.
@@ -97,21 +95,10 @@ class AlignedBlob : public BlobGrid {
   // search parameters are determined by the AlignedBlobParams.
   // vertical_x and y are updated with an estimate of the real
   // vertical direction. (skew finding.)
-  // Returns NULL if no decent vector can be found.
+  // Returns nullptr if no decent vector can be found.
   TabVector* FindVerticalAlignment(AlignedBlobParams align_params,
                                    BLOBNBOX* bbox,
                                    int* vertical_x, int* vertical_y);
-
-  // Increment the serial number counter and set the string to use
-  // for a filename if textord_debug_images is true.
-  static void IncrementDebugPix();
-
-  // Return the string to use for a filename if textord_debug_images is true.
-  // Use IncrementDebugPix first to set the filename, and each time is
-  // to be incremented.
-  static const STRING& textord_debug_pix() {
-    return textord_debug_pix_;
-  }
 
  private:
   // Find a set of blobs that are aligned in the given vertical
@@ -125,21 +112,15 @@ class AlignedBlob : public BlobGrid {
   // Search vertically for a blob that is aligned with the input bbox.
   // The search parameters are determined by AlignedBlobParams.
   // top_to_bottom tells whether to search down or up.
-  // The return value is NULL if nothing was found in the search box
-  // or if a blob was found in the gutter. On a NULL return, end_y
+  // The return value is nullptr if nothing was found in the search box
+  // or if a blob was found in the gutter. On a nullptr return, end_y
   // is set to the edge of the search box or the leading edge of the
   // gutter blob if one was found.
   BLOBNBOX* FindAlignedBlob(const AlignedBlobParams& p,
                             bool top_to_bottom, BLOBNBOX* bbox,
                             int x_start, int* end_y);
-
-  // Name of image file to use if textord_debug_images is true.
-  static STRING textord_debug_pix_;
-  // Index to image file to use if textord_debug_images is true.
-  static int debug_pix_index_;
 };
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_TEXTORD_ALIGNEDBLOB_H__
-
+#endif  // TESSERACT_TEXTORD_ALIGNEDBLOB_H_

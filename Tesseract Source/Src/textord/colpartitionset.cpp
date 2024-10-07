@@ -18,8 +18,11 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
+
 #include "colpartitionset.h"
-#include "ndminx.h"
 #include "workingpartset.h"
 #include "tablefind.h"
 
@@ -42,7 +45,15 @@ ColPartitionSet::ColPartitionSet(ColPartition* part) {
   ComputeCoverage();
 }
 
-ColPartitionSet::~ColPartitionSet() {
+// Returns the number of columns of good width.
+int ColPartitionSet::GoodColumnCount() const {
+  int num_good_cols = 0;
+  // This is a read-only iteration of the list.
+  ColPartition_IT it(const_cast<ColPartition_LIST*>(&parts_));
+  for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
+    if (it.data()->good_width()) ++num_good_cols;
+  }
+  return num_good_cols;
 }
 
 // Return an element of the parts_ list from its index.
@@ -51,11 +62,11 @@ ColPartition* ColPartitionSet::GetColumnByIndex(int index) {
   it.mark_cycle_pt();
   for (int i = 0; i < index && !it.cycled_list(); ++i, it.forward());
   if (it.cycled_list())
-    return NULL;
+    return nullptr;
   return it.data();
 }
 
-// Return the ColPartition that contains the given coords, if any, else NULL.
+// Return the ColPartition that contains the given coords, if any, else nullptr.
 ColPartition* ColPartitionSet::ColumnContaining(int x, int y) {
   ColPartition_IT it(&parts_);
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
@@ -63,7 +74,7 @@ ColPartition* ColPartitionSet::ColumnContaining(int x, int y) {
     if (part->ColumnContains(x, y))
       return part;
   }
-  return NULL;
+  return nullptr;
 }
 
 // Extract all the parts from the list, relinquishing ownership.
@@ -83,13 +94,13 @@ void ColPartitionSet::ImproveColumnCandidate(WidthCallback* cb,
   // to improve this.
   for (int i = 0; i < set_size; ++i) {
     ColPartitionSet* column_set = src_sets->get(i);
-    if (column_set == NULL)
+    if (column_set == nullptr)
       continue;
     // Iterate over the parts in this and column_set, adding bigger or
     // new parts in column_set to this.
     ColPartition_IT part_it(&parts_);
     ASSERT_HOST(!part_it.empty());
-    int prev_right = MIN_INT32;
+    int prev_right = INT32_MIN;
     part_it.mark_cycle_pt();
     ColPartition_IT col_it(&column_set->parts_);
     for (col_it.mark_cycle_pt(); !col_it.cycled_list(); col_it.forward()) {
@@ -120,7 +131,7 @@ void ColPartitionSet::ImproveColumnCandidate(WidthCallback* cb,
         int col_box_left = col_part->BoxLeftKey();
         bool tab_width_ok = cb->Run(part->KeyWidth(col_left, part_right));
         bool box_width_ok = cb->Run(part->KeyWidth(col_box_left, part_right));
-        if (tab_width_ok || (!part_width_ok )) {
+        if (tab_width_ok || (!part_width_ok)) {
           // The tab is leaving the good column metric at least as good as
           // it was before, so use the tab.
           part->CopyLeftTab(*col_part, false);
@@ -141,7 +152,7 @@ void ColPartitionSet::ImproveColumnCandidate(WidthCallback* cb,
         int col_box_right = col_part->BoxRightKey();
         bool tab_width_ok = cb->Run(part->KeyWidth(part_left, col_right));
         bool box_width_ok = cb->Run(part->KeyWidth(part_left, col_box_right));
-        if (tab_width_ok || (!part_width_ok )) {
+        if (tab_width_ok || (!part_width_ok)) {
           // The tab is leaving the good column metric at least as good as
           // it was before, so use the tab.
           part->CopyRightTab(*col_part, false);
@@ -236,7 +247,7 @@ bool ColPartitionSet::CompatibleColumns(bool debug, ColPartitionSet* other,
     int right = part->bounding_box().right();
     ColPartition* left_col = ColumnContaining(left, y);
     ColPartition* right_col = ColumnContaining(right, y);
-    if (right_col == NULL || left_col == NULL) {
+    if (right_col == nullptr || left_col == nullptr) {
       if (debug) {
         tprintf("CompatibleColumns false due to partition edge outside\n");
         part->Print();
@@ -308,7 +319,7 @@ int ColPartitionSet::UnmatchedWidth(ColPartitionSet* part_set) {
       // is outside.
       int x = (box.left() + box.right()) / 2;
       ColPartition* col = ColumnContaining(x, y);
-      if (col == NULL)
+      if (col == nullptr)
         total_width += box.width();
     }
   }
@@ -351,7 +362,7 @@ ColPartitionSet* ColPartitionSet::Copy(bool good_only) {
       dest_it.add_after_then_move(part->ShallowCopy());
   }
   if (dest_it.empty())
-    return NULL;
+    return nullptr;
   return new ColPartitionSet(&copy_parts);
 }
 
@@ -365,7 +376,7 @@ void ColPartitionSet::GetColumnBoxes(int y_bottom, int y_top,
     ColPartition* part = it.data();
     ICOORD bot_left(part->LeftAtY(y_top), y_bottom);
     ICOORD top_right(part->RightAtY(y_bottom), y_top);
-    ColSegment *col_seg = new ColSegment();
+    auto *col_seg = new ColSegment();
     col_seg->InsertBox(TBOX(bot_left, top_right));
     col_it.add_after_then_move(col_seg);
   }
@@ -374,14 +385,14 @@ void ColPartitionSet::GetColumnBoxes(int y_bottom, int y_top,
 // Display the edges of the columns at the given y coords.
 void ColPartitionSet::DisplayColumnEdges(int y_bottom, int y_top,
                                          ScrollView* win) {
-  #ifndef GRAPHICS_DISABLED
+#ifndef GRAPHICS_DISABLED
   ColPartition_IT it(&parts_);
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
     ColPartition* part = it.data();
     win->Line(part->LeftAtY(y_top), y_top, part->LeftAtY(y_bottom), y_bottom);
     win->Line(part->RightAtY(y_top), y_top, part->RightAtY(y_bottom), y_bottom);
   }
-  #endif  // GRAPHICS_DISABLED
+#endif  // GRAPHICS_DISABLED
 }
 
 // Return the ColumnSpanningType that best explains the columns overlapped
@@ -392,7 +403,8 @@ void ColPartitionSet::DisplayColumnEdges(int y_bottom, int y_top,
 // represent the gaps in between columns, with 0 being left of the leftmost.
 // resolution refers to the ppi resolution of the image.
 ColumnSpanningType ColPartitionSet::SpanningType(int resolution,
-                                                 int left, int right, int y,
+                                                 int left, int right,
+                                                 int height, int y,
                                                  int left_margin,
                                                  int right_margin,
                                                  int* first_col,
@@ -406,13 +418,15 @@ ColumnSpanningType ColPartitionSet::SpanningType(int resolution,
   int col_index = 1;
   for (it.mark_cycle_pt(); !it.cycled_list(); it.forward(), col_index += 2) {
     ColPartition* part = it.data();
-    if (part->ColumnContains(left, y)) {
+    if (part->ColumnContains(left, y) ||
+        (it.at_first() && part->ColumnContains(left + height, y))) {
       // In the default case, first_col is set, but columns_spanned remains
       // zero, so first_col will get reset in the first column genuinely
       // spanned, but we can tell the difference from a noise partition
       // that touches no column.
       *first_col = col_index;
-      if (part->ColumnContains(right, y)) {
+      if (part->ColumnContains(right, y) ||
+          (it.at_last() && part->ColumnContains(right - height, y))) {
         // Both within a single column.
         *last_col = col_index;
         return CST_FLOWING;
@@ -422,7 +436,8 @@ ColumnSpanningType ColPartitionSet::SpanningType(int resolution,
         *first_spanned_col = col_index;
         margin_columns = 1;
       }
-    } else if (part->ColumnContains(right, y)) {
+    } else if (part->ColumnContains(right, y) ||
+               (it.at_last() && part->ColumnContains(right - height, y))) {
       if (*first_col < 0) {
         // It started in-between.
         *first_col = col_index - 1;
@@ -498,14 +513,14 @@ void ColPartitionSet::ChangeWorkColumns(const ICOORD& bleft,
   // one  whenever we keep a column, or at the end.
   BLOCK_LIST completed_blocks;
   TO_BLOCK_LIST to_blocks;
-  WorkingPartSet* first_new_set = NULL;
-  WorkingPartSet* working_set = NULL;
+  WorkingPartSet* first_new_set = nullptr;
+  WorkingPartSet* working_set = nullptr;
   ColPartition_IT col_it(&parts_);
   for (col_it.mark_cycle_pt(); !col_it.cycled_list(); col_it.forward()) {
     ColPartition* column = col_it.data();
     // Any existing column to the left of column is completed.
     while (!src_it.empty() &&
-           ((working_set = src_it.data())->column() == NULL ||
+           ((working_set = src_it.data())->column() == nullptr ||
             working_set->column()->right_key() <= column->left_key())) {
       src_it.extract();
       working_set->ExtractCompletedBlocks(bleft, tright, resolution,
@@ -515,20 +530,20 @@ void ColPartitionSet::ChangeWorkColumns(const ICOORD& bleft,
       src_it.forward();
     }
     // Make a new between-column WorkingSet for before the current column.
-    working_set = new WorkingPartSet(NULL);
+    working_set = new WorkingPartSet(nullptr);
     dest_it.add_after_then_move(working_set);
-    if (first_new_set == NULL)
+    if (first_new_set == nullptr)
       first_new_set = working_set;
     // A matching column gets to stay, and first_new_set gets all the
     // completed_sets.
-    working_set = src_it.empty() ? NULL : src_it.data();
-    if (working_set != NULL &&
+    working_set = src_it.empty() ? nullptr : src_it.data();
+    if (working_set != nullptr &&
         working_set->column()->MatchingColumns(*column)) {
       working_set->set_column(column);
       dest_it.add_after_then_move(src_it.extract());
       src_it.forward();
       first_new_set->InsertCompletedBlocks(&completed_blocks, &to_blocks);
-      first_new_set = NULL;
+      first_new_set = nullptr;
     } else {
       // Just make a new working set for the current column.
       working_set = new WorkingPartSet(column);
@@ -545,9 +560,9 @@ void ColPartitionSet::ChangeWorkColumns(const ICOORD& bleft,
     src_it.forward();
   }
   // Make a new between-column WorkingSet for after the last column.
-  working_set = new WorkingPartSet(NULL);
+  working_set = new WorkingPartSet(nullptr);
   dest_it.add_after_then_move(working_set);
-  if (first_new_set == NULL)
+  if (first_new_set == nullptr)
     first_new_set = working_set;
   // The first_new_set now gets any accumulated completed_parts/blocks.
   first_new_set->InsertCompletedBlocks(&completed_blocks, &to_blocks);
@@ -565,7 +580,9 @@ void ColPartitionSet::AccumulateColumnWidthsAndGaps(int* total_width,
     ++*width_samples;
     if (!it.at_last()) {
       ColPartition* next_part = it.data_relative(1);
-      int gap = part->KeyWidth(part->right_key(), next_part->left_key());
+      int part_left = part->right_key();
+      int part_right = next_part->left_key();
+      int gap = part->KeyWidth(part_left, part_right);
       *total_gap += gap;
       ++*gap_samples;
     }
@@ -605,7 +622,7 @@ void ColPartitionSet::AddPartition(ColPartition* new_part,
 // Coverage is split into good and bad. Good coverage is provided by
 // ColPartitions of a frequent width (according to the callback function
 // provided by TabFinder::WidthCB, which accesses stored statistics on the
-// widths of ColParititions) and bad coverage is provided by all other
+// widths of ColPartitions) and bad coverage is provided by all other
 // ColPartitions, even if they have tab vectors at both sides. Thus:
 // |-----------------------------------------------------------------|
 // |        Double     width    heading                              |

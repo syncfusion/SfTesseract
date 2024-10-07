@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        errcode.c  (Formerly error.c)
+ * File:        errcode.cpp  (Formerly error.c)
  * Description: Generic error handler function
  * Author:      Ray Smith
- * Created:     Tue May  1 16:28:39 BST 1990
  *
  * (C) Copyright 1989, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +16,13 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
-#include          <stdio.h>
-#include          <stdlib.h>
-#include          <stdarg.h>
-#include          <string.h>
-#ifdef __UNIX__
-#include          <signal.h>
-#endif
-#include          "tprintf.h"
-#include          "errcode.h"
+#include <cstdio>
+#include <cstdlib>
+#include <cstdarg>
+#include <cstring>
+#include "errcode.h"
 
-const ERRCODE BADERRACTION = "Illegal error action";
+constexpr ERRCODE BADERRACTION("Illegal error action");
 #define MAX_MSG       1024
 
 /**********************************************************************
@@ -47,12 +41,12 @@ const char *format, ...          // special message
   char msg[MAX_MSG];
   char *msgptr = msg;
 
-  if (caller != NULL)
+  if (caller != nullptr)
                                  //name of caller
     msgptr += sprintf (msgptr, "%s:", caller);
                                  //actual message
   msgptr += sprintf (msgptr, "Error:%s", message);
-  if (format != NULL) {
+  if (format != nullptr) {
     msgptr += sprintf (msgptr, ":");
     va_start(args, format);  //variable list
     #ifdef _WIN32
@@ -72,20 +66,27 @@ const char *format, ...          // special message
                                  //no specific
     msgptr += sprintf (msgptr, "\n");
 
-  fprintf(stderr, msg);
+  // %s is needed here so msg is printed correctly!
+  fprintf(stderr, "%s", msg);
 
-  int* p = NULL;
   switch (action) {
     case DBG:
     case TESSLOG:
       return;                    //report only
     case TESSEXIT:
-      //err_exit();
     case ABORT:
-      // Create a deliberate segv as the stack trace is more useful that way.
-      if (!*p)
-        abort();
+#if !defined(NDEBUG)
+      // Create a deliberate abnormal exit as the stack trace is more useful
+      // that way. This is done only in debug builds, because the
+      // error message "segmentation fault" confuses most normal users.
+#if defined(__GNUC__)
+      __builtin_trap();
+#else
+      *reinterpret_cast<int*>(0) = 0;
+#endif
+#endif
+      abort();
     default:
-      BADERRACTION.error ("error", ABORT, NULL);
+      BADERRACTION.error ("error", ABORT, nullptr);
   }
 }

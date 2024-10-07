@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        elst2.c  (Formerly elist2.c)
+ * File:        elst2.cpp  (Formerly elist2.c)
  * Description: Doubly linked embedded list code not in the include file.
  * Author:      Phil Cheatle
- * Created:     Wed Jan 23 11:04:47 GMT 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +16,7 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
-#include <stdlib.h>
-#include "host.h"
+#include <cstdlib>
 #include "elst2.h"
 
 /***********************************************************************
@@ -28,7 +25,7 @@
  **********************************************************************/
 
 /***********************************************************************
- *							ELIST2::internal_clear
+ *              ELIST2::internal_clear
  *
  *  Used by the destructor and the "clear" member function of derived list
  *  classes to destroy all the elements on the list.
@@ -46,15 +43,10 @@ void (*zapper) (ELIST2_LINK *)) {
   ELIST2_LINK *ptr;
   ELIST2_LINK *next;
 
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2::internal_clear", ABORT, NULL);
-  #endif
-
   if (!empty ()) {
     ptr = last->next;            //set to first
-    last->next = NULL;           //break circle
-    last = NULL;                 //set list empty
+    last->next = nullptr;           //break circle
+    last = nullptr;                 //set list empty
     while (ptr) {
       next = ptr->next;
       zapper(ptr);
@@ -64,7 +56,7 @@ void (*zapper) (ELIST2_LINK *)) {
 }
 
 /***********************************************************************
- *							ELIST2::assign_to_sublist
+ *              ELIST2::assign_to_sublist
  *
  *  The list is set to a sublist of another list.  "This" list must be empty
  *  before this function is invoked.  The two iterators passed must refer to
@@ -79,48 +71,36 @@ void (*zapper) (ELIST2_LINK *)) {
 void ELIST2::assign_to_sublist(                            //to this list
                                ELIST2_ITERATOR *start_it,  //from list start
                                ELIST2_ITERATOR *end_it) {  //from list end
-  const ERRCODE LIST_NOT_EMPTY =
-    "Destination list must be empty before extracting a sublist";
-
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2::assign_to_sublist", ABORT, NULL);
-  #endif
+  constexpr ERRCODE LIST_NOT_EMPTY(
+    "Destination list must be empty before extracting a sublist");
 
   if (!empty ())
-    LIST_NOT_EMPTY.error ("ELIST2.assign_to_sublist", ABORT, NULL);
+    LIST_NOT_EMPTY.error ("ELIST2.assign_to_sublist", ABORT, nullptr);
 
   last = start_it->extract_sublist (end_it);
 }
 
-
 /***********************************************************************
- *							ELIST2::length
+ *              ELIST2::length
  *
  *  Return count of elements on list
  **********************************************************************/
 
-inT32 ELIST2::length() const {  // count elements
+int32_t ELIST2::length() const {  // count elements
   ELIST2_ITERATOR it(const_cast<ELIST2*>(this));
-  inT32 count = 0;
-
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2::length", ABORT, NULL);
-  #endif
+  int32_t count = 0;
 
   for (it.mark_cycle_pt (); !it.cycled_list (); it.forward ())
     count++;
   return count;
 }
 
-
 /***********************************************************************
- *							ELIST2::sort
+ *              ELIST2::sort
  *
  *  Sort elements on list
- *  NB If you dont like the const declarations in the comparator, coerce yours:
- *   ( int (*)(const void *, const void *)
+ *  NB If you don't like the const declarations in the comparator, coerce yours:
+ *   (int (*)(const void *, const void *)
  **********************************************************************/
 
 void
@@ -128,19 +108,14 @@ ELIST2::sort (                   //sort elements
 int comparator (                 //comparison routine
 const void *, const void *)) {
   ELIST2_ITERATOR it(this);
-  inT32 count;
+  int32_t count;
   ELIST2_LINK **base;            //ptr array to sort
   ELIST2_LINK **current;
-  inT32 i;
-
-  #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2::sort", ABORT, NULL);
-  #endif
+  int32_t i;
 
   /* Allocate an array of pointers, one per list element */
   count = length ();
-  base = (ELIST2_LINK **) malloc (count * sizeof (ELIST2_LINK *));
+  base = static_cast<ELIST2_LINK **>(malloc (count * sizeof (ELIST2_LINK *)));
 
   /* Extract all elements, putting the pointers in the array */
   current = base;
@@ -150,7 +125,7 @@ const void *, const void *)) {
   }
 
   /* Sort the pointer array */
-  qsort ((char *) base, count, sizeof (*base), comparator);
+  qsort(base, count, sizeof(*base), comparator);
 
   /* Rebuild the list from the sorted pointers */
   current = base;
@@ -163,14 +138,14 @@ const void *, const void *)) {
 
 // Assuming list has been sorted already, insert new_link to
 // keep the list sorted according to the same comparison function.
-// Comparision function is the same as used by sort, i.e. uses double
+// Comparison function is the same as used by sort, i.e. uses double
 // indirection. Time is O(1) to add to beginning or end.
 // Time is linear to add pre-sorted items to an empty list.
 void ELIST2::add_sorted(int comparator(const void*, const void*),
                         ELIST2_LINK* new_link) {
   // Check for adding at the end.
-  if (last == NULL || comparator(&last, &new_link) < 0) {
-    if (last == NULL) {
+  if (last == nullptr || comparator(&last, &new_link) < 0) {
+    if (last == nullptr) {
       new_link->next = new_link;
       new_link->prev = new_link;
     } else {
@@ -201,7 +176,7 @@ void ELIST2::add_sorted(int comparator(const void*, const void*),
  **********************************************************************/
 
 /***********************************************************************
- *							ELIST2_ITERATOR::forward
+ *              ELIST2_ITERATOR::forward
  *
  *  Move the iterator to the next element of the list.
  *  REMEMBER: ALL LISTS ARE CIRCULAR.
@@ -209,18 +184,16 @@ void ELIST2::add_sorted(int comparator(const void*, const void*),
 
 ELIST2_LINK *ELIST2_ITERATOR::forward() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2_ITERATOR::forward", ABORT, NULL);
   if (!list)
-    NO_LIST.error ("ELIST2_ITERATOR::forward", ABORT, NULL);
+    NO_LIST.error ("ELIST2_ITERATOR::forward", ABORT, nullptr);
   #endif
   if (list->empty ())
-    return NULL;
+    return nullptr;
 
   if (current) {                 //not removed so
                                  //set previous
     prev = current;
-    started_cycling = TRUE;
+    started_cycling = true;
     // In case next is deleted by another iterator, get it from the current.
     current = current->next;
   }
@@ -229,21 +202,25 @@ ELIST2_LINK *ELIST2_ITERATOR::forward() {
       cycle_pt = next;
     current = next;
   }
+
+#ifndef NDEBUG
+  if (!current)
+    NULL_DATA.error ("ELIST2_ITERATOR::forward", ABORT, nullptr);
+#endif
+
   next = current->next;
 
-  #ifndef NDEBUG
-  if (!current)
-    NULL_DATA.error ("ELIST2_ITERATOR::forward", ABORT, NULL);
+#ifndef NDEBUG
   if (!next)
     NULL_NEXT.error ("ELIST2_ITERATOR::forward", ABORT,
                      "This is: %p  Current is: %p", this, current);
-  #endif
+#endif
+
   return current;
 }
 
-
 /***********************************************************************
- *							ELIST2_ITERATOR::backward
+ *              ELIST2_ITERATOR::backward
  *
  *  Move the iterator to the previous element of the list.
  *  REMEMBER: ALL LISTS ARE CIRCULAR.
@@ -251,18 +228,16 @@ ELIST2_LINK *ELIST2_ITERATOR::forward() {
 
 ELIST2_LINK *ELIST2_ITERATOR::backward() {
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2_ITERATOR::backward", ABORT, NULL);
   if (!list)
-    NO_LIST.error ("ELIST2_ITERATOR::backward", ABORT, NULL);
+    NO_LIST.error ("ELIST2_ITERATOR::backward", ABORT, nullptr);
   #endif
   if (list->empty ())
-    return NULL;
+    return nullptr;
 
   if (current) {                 //not removed so
                                  //set previous
     next = current;
-    started_cycling = TRUE;
+    started_cycling = true;
     // In case prev is deleted by another iterator, get it from current.
     current = current->prev;
   } else {
@@ -270,37 +245,35 @@ ELIST2_LINK *ELIST2_ITERATOR::backward() {
       cycle_pt = prev;
     current = prev;
   }
-  prev = current->prev;
 
   #ifndef NDEBUG
   if (!current)
-    NULL_DATA.error ("ELIST2_ITERATOR::backward", ABORT, NULL);
+    NULL_DATA.error ("ELIST2_ITERATOR::backward", ABORT, nullptr);
   if (!prev)
     NULL_PREV.error ("ELIST2_ITERATOR::backward", ABORT,
       "This is: %p  Current is: %p", this, current);
   #endif
+
+  prev = current->prev;
   return current;
 }
 
-
 /***********************************************************************
- *							ELIST2_ITERATOR::data_relative
+ *              ELIST2_ITERATOR::data_relative
  *
  *  Return the data pointer to the element "offset" elements from current.
  *  (This function can't be INLINEd because it contains a loop)
  **********************************************************************/
 
 ELIST2_LINK *ELIST2_ITERATOR::data_relative(                //get data + or - ..
-                                            inT8 offset) {  //offset from current
+                                            int8_t offset) {  //offset from current
   ELIST2_LINK *ptr;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2_ITERATOR::data_relative", ABORT, NULL);
   if (!list)
-    NO_LIST.error ("ELIST2_ITERATOR::data_relative", ABORT, NULL);
+    NO_LIST.error ("ELIST2_ITERATOR::data_relative", ABORT, nullptr);
   if (list->empty ())
-    EMPTY_LIST.error ("ELIST2_ITERATOR::data_relative", ABORT, NULL);
+    EMPTY_LIST.error ("ELIST2_ITERATOR::data_relative", ABORT, nullptr);
   #endif
 
   if (offset < 0)
@@ -310,15 +283,14 @@ ELIST2_LINK *ELIST2_ITERATOR::data_relative(                //get data + or - ..
 
   #ifndef NDEBUG
   if (!ptr)
-    NULL_DATA.error ("ELIST2_ITERATOR::data_relative", ABORT, NULL);
+    NULL_DATA.error ("ELIST2_ITERATOR::data_relative", ABORT, nullptr);
   #endif
 
   return ptr;
 }
 
-
 /***********************************************************************
- *							ELIST2_ITERATOR::exchange()
+ *              ELIST2_ITERATOR::exchange()
  *
  *  Given another iterator, whose current element is a different element on
  *  the same list list OR an element of another list, exchange the two current
@@ -329,18 +301,16 @@ ELIST2_LINK *ELIST2_ITERATOR::data_relative(                //get data + or - ..
 
 void ELIST2_ITERATOR::exchange(                              //positions of 2 links
                                ELIST2_ITERATOR *other_it) {  //other iterator
-  const ERRCODE DONT_EXCHANGE_DELETED =
-    "Can't exchange deleted elements of lists";
+  constexpr ERRCODE DONT_EXCHANGE_DELETED(
+    "Can't exchange deleted elements of lists");
 
   ELIST2_LINK *old_current;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2_ITERATOR::exchange", ABORT, NULL);
   if (!list)
-    NO_LIST.error ("ELIST2_ITERATOR::exchange", ABORT, NULL);
+    NO_LIST.error ("ELIST2_ITERATOR::exchange", ABORT, nullptr);
   if (!other_it)
-    BAD_PARAMETER.error ("ELIST2_ITERATOR::exchange", ABORT, "other_it NULL");
+    BAD_PARAMETER.error ("ELIST2_ITERATOR::exchange", ABORT, "other_it nullptr");
   if (!(other_it->list))
     NO_LIST.error ("ELIST2_ITERATOR::exchange", ABORT, "other_it");
   #endif
@@ -355,7 +325,7 @@ void ELIST2_ITERATOR::exchange(                              //positions of 2 li
   /* Error if either current element is deleted */
 
   if (!current || !other_it->current)
-    DONT_EXCHANGE_DELETED.error ("ELIST2_ITERATOR.exchange", ABORT, NULL);
+    DONT_EXCHANGE_DELETED.error ("ELIST2_ITERATOR.exchange", ABORT, nullptr);
 
   /* Now handle the 4 cases: doubleton list; non-doubleton adjacent elements
   (other before this); non-doubleton adjacent elements (this before other);
@@ -428,9 +398,8 @@ void ELIST2_ITERATOR::exchange(                              //positions of 2 li
   other_it->current = old_current;
 }
 
-
 /***********************************************************************
- *							ELIST2_ITERATOR::extract_sublist()
+ *              ELIST2_ITERATOR::extract_sublist()
  *
  *  This is a private member, used only by ELIST2::assign_to_sublist.
  *  Given another iterator for the same list, extract the links from THIS to
@@ -442,53 +411,51 @@ void ELIST2_ITERATOR::exchange(                              //positions of 2 li
 ELIST2_LINK *ELIST2_ITERATOR::extract_sublist(                              //from this current
                                               ELIST2_ITERATOR *other_it) {  //to other current
   #ifndef NDEBUG
-  const ERRCODE BAD_EXTRACTION_PTS =
-    "Can't extract sublist from points on different lists";
-  const ERRCODE DONT_EXTRACT_DELETED =
-    "Can't extract a sublist marked by deleted points";
+  constexpr ERRCODE BAD_EXTRACTION_PTS(
+    "Can't extract sublist from points on different lists");
+  constexpr ERRCODE DONT_EXTRACT_DELETED(
+    "Can't extract a sublist marked by deleted points");
   #endif
-  const ERRCODE BAD_SUBLIST = "Can't find sublist end point in original list";
+  constexpr ERRCODE BAD_SUBLIST("Can't find sublist end point in original list");
 
   ELIST2_ITERATOR temp_it = *this;
   ELIST2_LINK *end_of_new_list;
 
   #ifndef NDEBUG
-  if (!this)
-    NULL_OBJECT.error ("ELIST2_ITERATOR::extract_sublist", ABORT, NULL);
   if (!other_it)
     BAD_PARAMETER.error ("ELIST2_ITERATOR::extract_sublist", ABORT,
-      "other_it NULL");
+      "other_it nullptr");
   if (!list)
-    NO_LIST.error ("ELIST2_ITERATOR::extract_sublist", ABORT, NULL);
+    NO_LIST.error ("ELIST2_ITERATOR::extract_sublist", ABORT, nullptr);
   if (list != other_it->list)
-    BAD_EXTRACTION_PTS.error ("ELIST2_ITERATOR.extract_sublist", ABORT, NULL);
+    BAD_EXTRACTION_PTS.error ("ELIST2_ITERATOR.extract_sublist", ABORT, nullptr);
   if (list->empty ())
-    EMPTY_LIST.error ("ELIST2_ITERATOR::extract_sublist", ABORT, NULL);
+    EMPTY_LIST.error ("ELIST2_ITERATOR::extract_sublist", ABORT, nullptr);
 
   if (!current || !other_it->current)
     DONT_EXTRACT_DELETED.error ("ELIST2_ITERATOR.extract_sublist", ABORT,
-      NULL);
+      nullptr);
   #endif
 
-  ex_current_was_last = other_it->ex_current_was_last = FALSE;
-  ex_current_was_cycle_pt = FALSE;
-  other_it->ex_current_was_cycle_pt = FALSE;
+  ex_current_was_last = other_it->ex_current_was_last = false;
+  ex_current_was_cycle_pt = false;
+  other_it->ex_current_was_cycle_pt = false;
 
   temp_it.mark_cycle_pt ();
   do {                           //walk sublist
-    if (temp_it.cycled_list ())  //cant find end pt
-      BAD_SUBLIST.error ("ELIST2_ITERATOR.extract_sublist", ABORT, NULL);
+    if (temp_it.cycled_list())   // can't find end pt
+      BAD_SUBLIST.error ("ELIST2_ITERATOR.extract_sublist", ABORT, nullptr);
 
     if (temp_it.at_last ()) {
       list->last = prev;
-      ex_current_was_last = other_it->ex_current_was_last = TRUE;
+      ex_current_was_last = other_it->ex_current_was_last = true;
     }
 
     if (temp_it.current == cycle_pt)
-      ex_current_was_cycle_pt = TRUE;
+      ex_current_was_cycle_pt = true;
 
     if (temp_it.current == other_it->cycle_pt)
-      other_it->ex_current_was_cycle_pt = TRUE;
+      other_it->ex_current_was_cycle_pt = true;
 
     temp_it.forward ();
   }
@@ -503,15 +470,15 @@ ELIST2_LINK *ELIST2_ITERATOR::extract_sublist(                              //fr
 
                                  //sublist = whole list
   if (prev == other_it->current) {
-    list->last = NULL;
-    prev = current = next = NULL;
-    other_it->prev = other_it->current = other_it->next = NULL;
+    list->last = nullptr;
+    prev = current = next = nullptr;
+    other_it->prev = other_it->current = other_it->next = nullptr;
   }
   else {
     prev->next = other_it->next;
     other_it->next->prev = prev;
 
-    current = other_it->current = NULL;
+    current = other_it->current = nullptr;
     next = other_it->next;
     other_it->prev = prev;
   }

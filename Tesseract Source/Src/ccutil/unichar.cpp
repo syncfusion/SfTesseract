@@ -2,7 +2,6 @@
 // File:        unichar.cpp
 // Description: Unicode character/ligature class.
 // Author:      Ray Smith
-// Created:     Wed Jun 28 17:05:01 PDT 2006
 //
 // (C) Copyright 2006, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,8 +17,13 @@
 ///////////////////////////////////////////////////////////////////////
 
 #include "unichar.h"
+#include "errcode.h"
+#include "genericvector.h"
+#include "tprintf.h"
 
 #define UNI_MAX_LEGAL_UTF32 0x0010FFFF
+
+namespace tesseract {
 
 // Construct from a utf8 string. If len<0 then the string is null terminated.
 // If the string is too long to fit in the UNICHAR then it takes only what
@@ -29,7 +33,7 @@ UNICHAR::UNICHAR(const char* utf8_str, int len) {
   int total_len = 0;
   int step = 0;
   if (len < 0) {
-    for (len = 0; utf8_str[len] != 0 && len < UNICHAR_LEN; ++len);
+    for (len = 0; len < UNICHAR_LEN && utf8_str[len] != 0; ++len);
   }
   for (total_len = 0; total_len < len; total_len += step) {
     step = utf8_step(utf8_str + total_len);
@@ -105,12 +109,15 @@ int UNICHAR::first_uni() const {
   case 4:
     uni += static_cast<unsigned char>(*src++);
     uni <<= 6;
+    // Fall through.
   case 3:
     uni += static_cast<unsigned char>(*src++);
     uni <<= 6;
+    // Fall through.
   case 2:
     uni += static_cast<unsigned char>(*src++);
     uni <<= 6;
+    // Fall through.
   case 1:
     uni += static_cast<unsigned char>(*src++);
   }
@@ -142,3 +149,98 @@ int UNICHAR::utf8_step(const char* utf8_str) {
 
   return utf8_bytes[static_cast<unsigned char>(*utf8_str)];
 }
+
+UNICHAR::const_iterator& UNICHAR::const_iterator::operator++() {
+  ASSERT_HOST(it_ != nullptr);
+  int step = utf8_step(it_);
+  if (step == 0) {
+    tprintf("ERROR: Illegal UTF8 encountered.\n");
+    for (int i = 0; i < 5 && it_[i] != '\0'; ++i) {
+      tprintf("Index %d char = 0x%x\n", i, it_[i]);
+    }
+    step = 1;
+  }
+  it_ += step;
+  return *this;
+}
+
+int UNICHAR::const_iterator::operator*() const {
+  ASSERT_HOST(it_ != nullptr);
+  const int len = utf8_step(it_);
+  if (len == 0) {
+    tprintf("WARNING: Illegal UTF8 encountered\n");
+    return ' ';
+  }
+  UNICHAR uch(it_, len);
+  return uch.first_uni();
+}
+
+int UNICHAR::const_iterator::get_utf8(char* utf8_output) const {
+  ASSERT_HOST(it_ != nullptr);
+  const int len = utf8_step(it_);
+  if (len == 0) {
+    tprintf("WARNING: Illegal UTF8 encountered\n");
+    utf8_output[0] = ' ';
+    return 1;
+  }
+  strncpy(utf8_output, it_, len);
+  return len;
+}
+
+int UNICHAR::const_iterator::utf8_len() const {
+  ASSERT_HOST(it_ != nullptr);
+  const int len = utf8_step(it_);
+  if (len == 0) {
+    tprintf("WARNING: Illegal UTF8 encountered\n");
+    return 1;
+  }
+  return len;
+}
+
+bool UNICHAR::const_iterator::is_legal() const {
+  return utf8_step(it_) > 0;
+}
+
+UNICHAR::const_iterator UNICHAR::begin(const char* utf8_str, int len) {
+  return UNICHAR::const_iterator(utf8_str);
+}
+
+UNICHAR::const_iterator UNICHAR::end(const char* utf8_str, int len) {
+  return UNICHAR::const_iterator(utf8_str + len);
+}
+
+// Converts a utf-8 string to a vector of unicodes.
+// Returns an empty vector if the input contains invalid UTF-8.
+/* static */
+std::vector<char32> UNICHAR::UTF8ToUTF32(const char* utf8_str) {
+  const int utf8_length = strlen(utf8_str);
+  std::vector<char32> unicodes;
+  unicodes.reserve(utf8_length);
+  const_iterator end_it(end(utf8_str, utf8_length));
+  for (const_iterator it(begin(utf8_str, utf8_length)); it != end_it; ++it) {
+    if (it.is_legal()) {
+      unicodes.push_back(*it);
+    } else {
+      unicodes.clear();
+      return unicodes;
+    }
+  }
+  return unicodes;
+}
+
+// Returns an empty string if the input contains an invalid unicode.
+std::string UNICHAR::UTF32ToUTF8(const std::vector<char32>& str32) {
+  std::string utf8_str;
+  for (char32 ch : str32) {
+    UNICHAR uni_ch(ch);
+    int step;
+    if (uni_ch.utf8_len() > 0 && (step = utf8_step(uni_ch.utf8())) > 0) {
+      utf8_str.append(uni_ch.utf8(), step);
+    } else {
+      return "";
+    }
+  }
+  return utf8_str;
+}
+
+}  // namespace tesseract

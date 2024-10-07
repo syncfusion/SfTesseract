@@ -17,8 +17,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_EQUATIONDETECTBASE_H__
-#define TESSERACT_TEXTORD_EQUATIONDETECTBASE_H__
+#ifndef TESSERACT_TEXTORD_EQUATIONDETECTBASE_H_
+#define TESSERACT_TEXTORD_EQUATIONDETECTBASE_H_
 
 class BLOBNBOX_LIST;
 class TO_BLOCK;
@@ -31,7 +31,7 @@ class ColPartitionSet;
 
 class EquationDetectBase {
  public:
-  EquationDetectBase();
+  EquationDetectBase() = default;
   virtual ~EquationDetectBase();
 
   // Iterate over the blobs inside to_block, and set the blobs that we want to
@@ -54,6 +54,6 @@ class EquationDetectBase {
   static void RenderSpecialText(Pix* pix, BLOBNBOX* blob);
 };
 
-};  // namespace tesseract
+}  // namespace tesseract
 
-#endif  // TESSERACT_TEXTORD_EQUATIONDETECTBASE_H__
+#endif  // TESSERACT_TEXTORD_EQUATIONDETECTBASE_H_

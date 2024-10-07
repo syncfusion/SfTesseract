@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        ocrblock.cpp  (Formerly block.c)
  * Description: BLOCK member functions and iterator functions.
- * Author:		Ray Smith
- * Created:		Fri Mar 15 09:41:28 GMT 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +16,11 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include <stdlib.h>
-#include "blckerr.h"
 #include "ocrblock.h"
+#include <cstdlib>
+#include <memory>  // std::unique_ptr
 #include "stepblob.h"
 #include "tprintf.h"
-
-#define BLOCK_LABEL_HEIGHT  150  //char height of block id
 
 ELISTIZE (BLOCK)
 /**
@@ -32,30 +28,29 @@ ELISTIZE (BLOCK)
  *
  * Constructor for a simple rectangular block.
  */
-BLOCK::BLOCK(const char *name,                //< filename
-             BOOL8 prop,                      //< proportional
-             inT16 kern,                      //< kerning
-             inT16 space,                     //< spacing
-             inT16 xmin,                      //< bottom left
-             inT16 ymin, inT16 xmax,          //< top right
-             inT16 ymax)
-  : PDBLK (xmin, ymin, xmax, ymax),
+BLOCK::BLOCK(const char *name,                ///< filename
+             bool prop,                       ///< proportional
+             int16_t kern,                    ///< kerning
+             int16_t space,                   ///< spacing
+             int16_t xmin,                    ///< bottom left
+             int16_t ymin, int16_t xmax,      ///< top right
+             int16_t ymax)
+  : pdblk(xmin, ymin, xmax, ymax),
     filename(name),
     re_rotation_(1.0f, 0.0f),
     classify_rotation_(1.0f, 0.0f),
     skew_(1.0f, 0.0f) {
-  ICOORDELT_IT left_it = &leftside;
-  ICOORDELT_IT right_it = &rightside;
+  ICOORDELT_IT left_it = &pdblk.leftside;
+  ICOORDELT_IT right_it = &pdblk.rightside;
 
   proportional = prop;
-  right_to_left_ = false;
   kerning = kern;
   spacing = space;
   font_class = -1;               //not assigned
   cell_over_xheight_ = 2.0f;
-  hand_poly = NULL;
-  left_it.set_to_list (&leftside);
-  right_it.set_to_list (&rightside);
+  pdblk.hand_poly = nullptr;
+  left_it.set_to_list (&pdblk.leftside);
+  right_it.set_to_list (&pdblk.rightside);
                                  //make default box
   left_it.add_to_end (new ICOORDELT (xmin, ymin));
   left_it.add_to_end (new ICOORDELT (xmin, ymax));
@@ -69,11 +64,9 @@ BLOCK::BLOCK(const char *name,                //< filename
  * Sort Comparator: Return <0 if row1 top < row2 top
  */
 
-int decreasing_top_order(  //
-                         const void *row1,
-                         const void *row2) {
-  return (*(ROW **) row2)->bounding_box ().top () -
-    (*(ROW **) row1)->bounding_box ().top ();
+static int decreasing_top_order(const void *row1, const void *row2) {
+  return (*reinterpret_cast<ROW* const*>(row2))->bounding_box().top() -
+    (*reinterpret_cast<ROW* const*>(row1))->bounding_box().top();
 }
 
 
@@ -83,8 +76,20 @@ int decreasing_top_order(  //
  * Rotate the polygon by the given rotation and recompute the bounding_box.
  */
 void BLOCK::rotate(const FCOORD& rotation) {
-  poly_block()->rotate(rotation);
-  box = *poly_block()->bounding_box();
+  pdblk.poly_block()->rotate(rotation);
+  pdblk.box = *pdblk.poly_block()->bounding_box();
+}
+
+// Returns the bounding box including the desired combination of upper and
+// lower noise/diacritic elements.
+TBOX BLOCK::restricted_bounding_box(bool upper_dots, bool lower_dots) const {
+  TBOX box;
+  // This is a read-only iteration of the rows in the block.
+  ROW_IT it(const_cast<ROW_LIST*>(&rows));
+  for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
+    box += it.data()->restricted_bounding_box(upper_dots, lower_dots);
+  }
+  return box;
 }
 
 /**
@@ -94,8 +99,8 @@ void BLOCK::rotate(const FCOORD& rotation) {
  * Does nothing to any contained rows/words/blobs etc.
  */
 void BLOCK::reflect_polygon_in_y_axis() {
-  poly_block()->reflect_in_y_axis();
-  box = *poly_block()->bounding_box();
+  pdblk.poly_block()->reflect_in_y_axis();
+  pdblk.box = *pdblk.poly_block()->bounding_box();
 }
 
 /**
@@ -129,23 +134,23 @@ void BLOCK::compress() {  // squash it up
 
   sort_rows();
 
-  box = TBOX (box.topleft (), box.topleft ());
-  box.move_bottom_edge (ROW_SPACING);
+  pdblk.box = TBOX (pdblk.box.topleft (), pdblk.box.topleft ());
+  pdblk.box.move_bottom_edge (ROW_SPACING);
   for (row_it.mark_cycle_pt (); !row_it.cycled_list (); row_it.forward ()) {
     row = row_it.data ();
-    row->move (box.botleft () - row_spacing -
+    row->move (pdblk.box.botleft () - row_spacing -
       row->bounding_box ().topleft ());
-    box += row->bounding_box ();
+    pdblk.box += row->bounding_box ();
   }
 
-  leftside.clear ();
-  icoordelt_it.set_to_list (&leftside);
-  icoordelt_it.add_to_end (new ICOORDELT (box.left (), box.bottom ()));
-  icoordelt_it.add_to_end (new ICOORDELT (box.left (), box.top ()));
-  rightside.clear ();
-  icoordelt_it.set_to_list (&rightside);
-  icoordelt_it.add_to_end (new ICOORDELT (box.right (), box.bottom ()));
-  icoordelt_it.add_to_end (new ICOORDELT (box.right (), box.top ()));
+  pdblk.leftside.clear ();
+  icoordelt_it.set_to_list (&pdblk.leftside);
+  icoordelt_it.add_to_end (new ICOORDELT (pdblk.box.left (), pdblk.box.bottom ()));
+  icoordelt_it.add_to_end (new ICOORDELT (pdblk.box.left (), pdblk.box.top ()));
+  pdblk.rightside.clear ();
+  icoordelt_it.set_to_list (&pdblk.rightside);
+  icoordelt_it.add_to_end (new ICOORDELT (pdblk.box.right (), pdblk.box.bottom ()));
+  icoordelt_it.add_to_end (new ICOORDELT (pdblk.box.right (), pdblk.box.top ()));
 }
 
 
@@ -171,7 +176,7 @@ void BLOCK::check_pitch() {  // check prop
 void BLOCK::compress(                  // squash it up
                      const ICOORD vec  // and move
                     ) {
-  box.move (vec);
+  pdblk.box.move (vec);
   compress();
 }
 
@@ -183,12 +188,12 @@ void BLOCK::compress(                  // squash it up
  */
 
 void BLOCK::print(            //print list of sides
-                  FILE *,     //< file to print on
-                  BOOL8 dump  //< print full detail
-                 ) {
-  ICOORDELT_IT it = &leftside;   //iterator
+        FILE*,     ///< file to print on
+        bool dump  ///< print full detail
+) {
+  ICOORDELT_IT it = &pdblk.leftside;   //iterator
 
-  box.print ();
+  pdblk.box.print ();
   tprintf ("Proportional= %s\n", proportional ? "TRUE" : "FALSE");
   tprintf ("Kerning= %d\n", kerning);
   tprintf ("Spacing= %d\n", spacing);
@@ -201,7 +206,7 @@ void BLOCK::print(            //print list of sides
       tprintf ("(%d,%d) ", it.data ()->x (), it.data ()->y ());
     tprintf ("\n");
     tprintf ("Right side coords are:\n");
-    it.set_to_list (&rightside);
+    it.set_to_list (&pdblk.rightside);
     for (it.mark_cycle_pt (); !it.cycled_list (); it.forward ())
       tprintf ("(%d,%d) ", it.data ()->x (), it.data ()->y ());
     tprintf ("\n");
@@ -218,7 +223,7 @@ BLOCK & BLOCK::operator= (       //assignment
 const BLOCK & source             //from this
 ) {
   this->ELIST_LINK::operator= (source);
-  this->PDBLK::operator= (source);
+  pdblk = source.pdblk;
   proportional = source.proportional;
   kerning = source.kerning;
   spacing = source.spacing;
@@ -241,7 +246,7 @@ const BLOCK & source             //from this
 //   margin - return value, the distance from x,y to the left margin of the
 //       block containing it.
 // If all segments were to the right of x, we return false and 0.
-bool LeftMargin(ICOORDELT_LIST *segments, int x, int *margin) {
+static bool LeftMargin(ICOORDELT_LIST *segments, int x, int *margin) {
   bool found = false;
   *margin = 0;
   if (segments->empty())
@@ -271,7 +276,7 @@ bool LeftMargin(ICOORDELT_LIST *segments, int x, int *margin) {
 //   margin - return value, the distance from x,y to the right margin of the
 //       block containing it.
 // If all segments were to the left of x, we return false and 0.
-bool RightMargin(ICOORDELT_LIST *segments, int x, int *margin) {
+static bool RightMargin(ICOORDELT_LIST *segments, int x, int *margin) {
   bool found = false;
   *margin = 0;
   if (segments->empty())
@@ -325,10 +330,10 @@ void BLOCK::compute_row_margins() {
   }
 
   // If Layout analysis was not called, default to this.
-  POLY_BLOCK rect_block(bounding_box(), PT_FLOWING_TEXT);
+  POLY_BLOCK rect_block(pdblk.bounding_box(), PT_FLOWING_TEXT);
   POLY_BLOCK *pblock = &rect_block;
-  if (poly_block() != NULL) {
-    pblock = poly_block();
+  if (pdblk.poly_block() != nullptr) {
+    pblock = pdblk.poly_block();
   }
 
   // Step One: Determine if there is a drop-cap.
@@ -369,9 +374,9 @@ void BLOCK::compute_row_margins() {
     TBOX row_box = row->bounding_box();
     int left_y = row->base_line(row_box.left()) + row->x_height();
     int left_margin;
-    ICOORDELT_LIST *segments = lines.get_line(left_y);
-    LeftMargin(segments, row_box.left(), &left_margin);
-    delete segments;
+    const std::unique_ptr</*non-const*/ ICOORDELT_LIST> segments_left(
+        lines.get_line(left_y));
+    LeftMargin(segments_left.get(), row_box.left(), &left_margin);
 
     if (row_box.top() >= drop_cap_bottom) {
       int drop_cap_distance = row_box.left() - row->space() - drop_cap_right;
@@ -383,9 +388,9 @@ void BLOCK::compute_row_margins() {
 
     int right_y = row->base_line(row_box.right()) + row->x_height();
     int right_margin;
-    segments = lines.get_line(right_y);
-    RightMargin(segments, row_box.right(), &right_margin);
-    delete segments;
+    const std::unique_ptr</*non-const*/ ICOORDELT_LIST> segments_right(
+        lines.get_line(right_y));
+    RightMargin(segments_right.get(), row_box.right(), &right_margin);
     row->set_lmargin(left_margin);
     row->set_rmargin(right_margin);
   }
@@ -473,6 +478,8 @@ void RefreshWordBlobsFromNewBlobs(BLOCK_LIST* block_list,
   BLOCK_IT block_it(block_list);
   for (block_it.mark_cycle_pt(); !block_it.cycled_list(); block_it.forward()) {
     BLOCK* block = block_it.data();
+    if (block->pdblk.poly_block() != nullptr && !block->pdblk.poly_block()->IsText())
+      continue;  // Don't touch non-text blocks.
     // Iterate over all rows in the block.
     ROW_IT row_it(block->row_list());
     for (row_it.mark_cycle_pt(); !row_it.cycled_list(); row_it.forward()) {

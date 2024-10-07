@@ -1,14 +1,9 @@
 /* -*-C-*-
  ********************************************************************************
  *
- * File:        render.h  (Formerly render.h)
+ * File:         render.h
  * Description:  Convert the various data type into line lists
  * Author:       Mark Seaman, OCR Technology
- * Created:      Fri Jul 28 13:14:48 1989
- * Modified:     Fri Apr 26 09:59:45 1991 (Mark Seaman) marks@hpgrlt
- * Language:     C
- * Package:      N/A
- * Status:       Experimental (Do Not Distribute)
  *
  * (c) Copyright 1989, Hewlett-Packard Company.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,9 +20,14 @@
 #ifndef RENDER_H
 #define RENDER_H
 
-#include "host.h"
-#include "callcpp.h"
-#include "blobs.h"
+#include "callcpp.h"  // for C_COL
+#include "params.h"   // for BOOL_VAR_H, BoolParam
+
+class ScrollView;
+
+struct EDGEPT;
+struct TBLOB;
+struct TESSLINE;
 
 /*----------------------------------------------------------------------
               V a r i a b l e s
@@ -36,8 +36,6 @@ extern ScrollView *blob_window;        /* Window for blobs */
 extern C_COL color_list[];       /* Colors for outlines */
 
 extern BOOL_VAR_H(wordrec_display_all_blobs, 0, "Display Blobs");
-
-extern BOOL_VAR_H(wordrec_display_all_words, 0, "Display Words");
 
 extern BOOL_VAR_H(wordrec_blob_pause, 0, "Blob pause");
 

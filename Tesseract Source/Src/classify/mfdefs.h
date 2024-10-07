@@ -1,10 +1,10 @@
 /******************************************************************************
- **	Filename:    mfdefs.h
- **	Purpose:     Definition of micro-features
- **	Author:      Dan Johnson
- **	History:     Mon Jan 22 08:42:13 1990, DSJ, Created.
+ ** Filename:    mfdefs.h
+ ** Purpose:     Definition of micro-features
+ ** Author:      Dan Johnson
+ ** History:     Mon Jan 22 08:42:13 1990, DSJ, Created.
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,38 +15,37 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-#ifndef   MFDEFS_H
-#define   MFDEFS_H
+#ifndef MFDEFS_H
+#define MFDEFS_H
 
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "oldlist.h"
 #include "matchdefs.h"
-#include "xform2d.h"
+#include "oldlist.h"
 
 /* definition of a list of micro-features */
-typedef LIST MICROFEATURES;
+using MICROFEATURES = LIST;
 
 /* definition of structure of micro-features */
-#define MFSIZE        6
-typedef FLOAT32 MFBLOCK[MFSIZE];
-typedef FLOAT32 *MICROFEATURE;
+#define MFSIZE 6
+typedef float MFBLOCK[MFSIZE];
+using MICROFEATURE = float*;
 
 /* definitions of individual micro-feature parameters */
-#define XPOSITION     0
-#define YPOSITION     1
-#define MFLENGTH      2
-#define ORIENTATION     3
-#define FIRSTBULGE      4
-#define SECONDBULGE     5
+#define XPOSITION 0
+#define YPOSITION 1
+#define MFLENGTH 2
+#define ORIENTATION 3
+#define FIRSTBULGE 4
+#define SECONDBULGE 5
 
 /**----------------------------------------------------------------------------
             Macros
 ----------------------------------------------------------------------------**/
 
 /* macros for accessing micro-feature lists */
-#define NextFeatureOf(L)  ( (MICROFEATURE) first_node ( L ) )
+#define NextFeatureOf(L) ((MICROFEATURE)first_node(L))
 
 /**----------------------------------------------------------------------------
           Public Function Prototypes

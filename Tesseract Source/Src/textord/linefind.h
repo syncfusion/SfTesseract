@@ -18,8 +18,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_LINEFIND_H__
-#define TESSERACT_TEXTORD_LINEFIND_H__
+#ifndef TESSERACT_TEXTORD_LINEFIND_H_
+#define TESSERACT_TEXTORD_LINEFIND_H_
 
 struct Boxa;
 struct Pix;
@@ -48,7 +48,7 @@ class LineFinder {
    * The output vertical_x and vertical_y contain a sum of the output vectors,
    * thereby giving the mean vertical direction.
    *
-   * If pix_music_mask != NULL, and music is detected, a mask of the staves
+   * If pix_music_mask != nullptr, and music is detected, a mask of the staves
    * and anything that is connected (bars, notes etc.) will be returned in
    * pix_music_mask, the mask subtracted from pix, and the lines will not
    * appear in v_lines or h_lines.
@@ -126,8 +126,8 @@ class LineFinder {
   // pix_intersections   pixels where vertical and horizontal lines meet.
   // pix_music_mask      candidate music staves.
   // This function promises to initialize all the output (2nd level) pointers,
-  // but any of the returns that are empty will be NULL on output.
-  // None of the input (1st level) pointers may be NULL except pix_music_mask,
+  // but any of the returns that are empty will be nullptr on output.
+  // None of the input (1st level) pointers may be nullptr except pix_music_mask,
   // which will disable music detection, and pixa_display, which is for debug.
   static void GetLineMasks(int resolution, Pix* src_pix,
                            Pix** pix_vline, Pix** pix_non_vline,
@@ -136,7 +136,7 @@ class LineFinder {
                            Pixa* pixa_display);
 
   // Returns a list of boxes corresponding to the candidate line segments. Sets
-  // the line_crossings member of the boxes so we can later determin the number
+  // the line_crossings member of the boxes so we can later determine the number
   // of intersections touched by a full line.
   static void GetLineBoxes(bool horizontal_lines,
                            Pix* pix_lines, Pix* pix_intersections,
@@ -146,5 +146,4 @@ class LineFinder {
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_TEXTORD_LINEFIND_H__
-
+#endif  // TESSERACT_TEXTORD_LINEFIND_H_

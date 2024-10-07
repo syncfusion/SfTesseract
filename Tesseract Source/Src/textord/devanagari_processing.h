@@ -1,9 +1,19 @@
 // Copyright 2008 Google Inc. All Rights Reserved.
 // Author: shobhitsaxena@google.com (Shobhit Saxena)
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #ifndef TESSERACT_TEXTORD_DEVNAGARI_PROCESSING_H_
 #define TESSERACT_TEXTORD_DEVNAGARI_PROCESSING_H_
 
+#include "allheaders.h"
 #include "ocrblock.h"
 #include "params.h"
 
@@ -20,14 +30,13 @@ BOOL_VAR_H(devanagari_split_debugimage, 0,
            "Whether to create a debug image for split shiro-rekha process.");
 
 class TBOX;
-class IMAGE;
 
 namespace tesseract {
 
 class PixelHistogram {
  public:
   PixelHistogram() {
-    hist_ = NULL;
+    hist_ = nullptr;
     length_ = 0;
   }
 
@@ -36,15 +45,11 @@ class PixelHistogram {
   }
 
   void Clear() {
-    if (hist_) {
-      delete[] hist_;
-    }
+    delete[] hist_;
     length_ = 0;
   }
 
-  int* const hist() const {
-    return hist_;
-  }
+  int* hist() const { return hist_; }
 
   int length() const {
     return length_;
@@ -78,7 +83,7 @@ class ShiroRekhaSplitter {
   // Returns true if a split was actually performed.
   // If split_for_pageseg is true, the pageseg_split_strategy_ is used for
   // splitting. If false, the ocr_split_strategy_ is used.
-  bool Split(bool split_for_pageseg);
+  bool Split(bool split_for_pageseg, DebugPixa* pixa_debug);
 
   // Clears the memory held by this object.
   void Clear();
@@ -145,9 +150,6 @@ class ShiroRekhaSplitter {
   BLOCK_LIST* segmentation_block_list() {
     return segmentation_block_list_;
   }
-
-  // This method dumps a debug image to the specified location.
-  void DumpDebugImage(const char* filename) const;
 
   // This method returns the computed mode-height of blobs in the pix.
   // It also prunes very small blobs from calculation. Could be used to provide

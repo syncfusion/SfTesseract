@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        tface.c  (Formerly tface.c)
+ * File:        tface.cpp  (Formerly tface.c)
  * Description: C side of the Tess/tessedit C/C++ interface.
- * Author:		Ray Smith
- * Created:		Mon Apr 27 11:57:06 BST 1992
+ * Author:      Ray Smith
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,26 +16,17 @@
  *
  **********************************************************************/
 
-#include "bestfirst.h"
+#include <cmath>
+
+#include "wordrec.h"
+
+#ifndef DISABLED_LEGACY_ENGINE
 #include "callcpp.h"
 #include "chop.h"
-#include "chopper.h"
-#include "danerror.h"
-#include "fxdefs.h"
-#include "globals.h"
-#include "gradechop.h"
-#include "matchtab.h"
-#include "pageres.h"
-#include "permute.h"
-#include "wordclass.h"
-#include "wordrec.h"
 #include "featdefs.h"
-
-#include <math.h>
-#ifdef __UNIX__
-#include <unistd.h>
+#include "pageres.h"
+#include "params_model.h"
 #endif
-
 
 namespace tesseract {
 
@@ -48,16 +38,21 @@ namespace tesseract {
  * and Dawg models.
  */
 void Wordrec::program_editup(const char *textbase,
-                             bool init_classifier,
-                             bool init_dict) {
-  if (textbase != NULL) imagefile = textbase;
+                             TessdataManager *init_classifier,
+                             TessdataManager *init_dict) {
+  if (textbase != nullptr) imagefile = textbase;
+#ifndef DISABLED_LEGACY_ENGINE
   InitFeatureDefs(&feature_defs_);
-  SetupExtractors(&feature_defs_);
   InitAdaptiveClassifier(init_classifier);
-  if (init_dict) getDict().Load();
+  if (init_dict) {
+    getDict().SetupForLoad(Dict::GlobalDawgCache());
+    getDict().Load(lang, init_dict);
+    getDict().FinishLoad();
+  }
   pass2_ok_split = chop_ok_split;
-  pass2_seg_states = wordrec_num_seg_states;
+#endif  // ndef DISABLED_LEGACY_ENGINE
 }
+
 
 /**
  * @name end_recog
@@ -74,53 +69,14 @@ int Wordrec::end_recog() {
 /**
  * @name program_editdown
  *
- * This function holds any nessessary post processing for the Wise Owl
+ * This function holds any necessary post processing for the Wise Owl
  * program.
  */
-void Wordrec::program_editdown(inT32 elasped_time) {
+void Wordrec::program_editdown(int32_t elasped_time) {
+#ifndef DISABLED_LEGACY_ENGINE
   EndAdaptiveClassifier();
-  blob_match_table.end_match_table();
-  getDict().InitChoiceAccum();
+#endif  // ndef DISABLED_LEGACY_ENGINE
   getDict().End();
-}
-
-
-/**
- * @name set_pass1
- *
- * Get ready to do some pass 1 stuff.
- */
-void Wordrec::set_pass1() {
-  chop_ok_split.set_value(70.0);
-  wordrec_num_seg_states.set_value(15);
-  SettupPass1();
-}
-
-
-/**
- * @name set_pass2
- *
- * Get ready to do some pass 2 stuff.
- */
-void Wordrec::set_pass2() {
-  chop_ok_split.set_value(pass2_ok_split);
-  wordrec_num_seg_states.set_value(pass2_seg_states);
-  SettupPass2();
-}
-
-
-/**
- * @name cc_recog
- *
- * Recognize a word.
- */
-BLOB_CHOICE_LIST_VECTOR *Wordrec::cc_recog(WERD_RES *word) {
-  getDict().InitChoiceAccum();
-  getDict().reset_hyphen_vars(word->word->flag(W_EOL));
-  blob_match_table.init_match_table();
-  BLOB_CHOICE_LIST_VECTOR *results = chop_word_main(word);
-  getDict().DebugWordChoices();
-  return results;
 }
 
 
@@ -134,26 +90,67 @@ int Wordrec::dict_word(const WERD_CHOICE &word) {
   return getDict().valid_word(word);
 }
 
+
+#ifndef DISABLED_LEGACY_ENGINE
+
+/**
+ * @name set_pass1
+ *
+ * Get ready to do some pass 1 stuff.
+ */
+void Wordrec::set_pass1() {
+  chop_ok_split.set_value(70.0);
+  language_model_->getParamsModel().SetPass(ParamsModel::PTRAIN_PASS1);
+  SettupPass1();
+}
+
+
+/**
+ * @name set_pass2
+ *
+ * Get ready to do some pass 2 stuff.
+ */
+void Wordrec::set_pass2() {
+  chop_ok_split.set_value(pass2_ok_split);
+  language_model_->getParamsModel().SetPass(ParamsModel::PTRAIN_PASS2);
+  SettupPass2();
+}
+
+
+/**
+ * @name cc_recog
+ *
+ * Recognize a word.
+ */
+void Wordrec::cc_recog(WERD_RES *word) {
+  getDict().reset_hyphen_vars(word->word->flag(W_EOL));
+  chop_word_main(word);
+  word->DebugWordChoices(getDict().stopper_debug_level >= 1,
+                         getDict().word_to_debug.string());
+  ASSERT_HOST(word->StatesAllValid());
+}
+
+
 /**
  * @name call_matcher
  *
  * Called from Tess with a blob in tess form.
  * The blob may need rotating to the correct orientation for classification.
  */
-BLOB_CHOICE_LIST *Wordrec::call_matcher(const DENORM* denorm, TBLOB *tessblob) {
+BLOB_CHOICE_LIST *Wordrec::call_matcher(TBLOB *tessblob) {
   // Rotate the blob for classification if necessary.
-  TBLOB* rotated_blob = tessblob->ClassifyNormalizeIfNeeded(&denorm);
-  if (rotated_blob == NULL) {
+  TBLOB* rotated_blob = tessblob->ClassifyNormalizeIfNeeded();
+  if (rotated_blob == nullptr) {
     rotated_blob = tessblob;
   }
-  BLOB_CHOICE_LIST *ratings = new BLOB_CHOICE_LIST();  // matcher result
-  AdaptiveClassifier(rotated_blob, *denorm, ratings, NULL);
+  auto *ratings = new BLOB_CHOICE_LIST();  // matcher result
+  AdaptiveClassifier(rotated_blob, ratings);
   if (rotated_blob != tessblob) {
     delete rotated_blob;
-    delete denorm;
   }
   return ratings;
 }
 
+#endif  // ndef DISABLED_LEGACY_ENGINE
 
 }  // namespace tesseract

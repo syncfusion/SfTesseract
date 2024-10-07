@@ -1,8 +1,7 @@
 ///////////////////////////////////////////////////////////////////////
-// File:        boxword.h
+// File:        boxword.cpp
 // Description: Class to represent the bounding boxes of the output.
 // Author:      Ray Smith
-// Created:     Tue May 25 14:18:14 PDT 2010
 //
 // (C) Copyright 2010, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +18,7 @@
 
 #include "blobs.h"
 #include "boxword.h"
+#include "host.h"       // for NearlyEqual
 #include "normalis.h"
 #include "ocrblock.h"
 #include "pageres.h"
@@ -29,21 +29,12 @@ namespace tesseract {
 // tolerance. Otherwise, the blob may be chopped and we have to just use
 // the word bounding box.
 const int kBoxClipTolerance = 2;
-// Min offset in baseline-normalized coords to make a character a subscript.
-const int kMinSubscriptOffset = 20;
-// Min offset in baseline-normalized coords to make a character a superscript.
-const int kMinSuperscriptOffset = 20;
-// Max y of bottom of a drop-cap blob.
-const int kMaxDropCapBottom = -128;
 
 BoxWord::BoxWord() : length_(0) {
 }
 
 BoxWord::BoxWord(const BoxWord& src) {
   CopyFrom(src);
-}
-
-BoxWord::~BoxWord() {
 }
 
 BoxWord& BoxWord::operator=(const BoxWord& src) {
@@ -60,35 +51,29 @@ void BoxWord::CopyFrom(const BoxWord& src) {
     boxes_.push_back(src.boxes_[i]);
 }
 
-// Factory to build a BoxWord from a TWERD and the DENORM to switch
-// back to original image coordinates.
-// If the denorm is not NULL, then the output is denormalized and rotated
-// back to the original image coordinates.
-BoxWord* BoxWord::CopyFromNormalized(const DENORM* denorm,
-                                     TWERD* tessword) {
-  BoxWord* boxword = new BoxWord();
+// Factory to build a BoxWord from a TWERD using the DENORMs on each blob to
+// switch back to original image coordinates.
+BoxWord* BoxWord::CopyFromNormalized(TWERD* tessword) {
+  auto* boxword = new BoxWord();
   // Count the blobs.
-  boxword->length_ = 0;
-  for (TBLOB* tblob = tessword->blobs; tblob != NULL; tblob = tblob->next)
-    ++boxword->length_;
+  boxword->length_ = tessword->NumBlobs();
   // Allocate memory.
   boxword->boxes_.reserve(boxword->length_);
 
-  for (TBLOB* tblob = tessword->blobs; tblob != NULL; tblob = tblob->next) {
+  for (int b = 0; b < boxword->length_; ++b) {
+    TBLOB* tblob = tessword->blobs[b];
     TBOX blob_box;
-    for (TESSLINE* outline = tblob->outlines; outline != NULL;
+    for (TESSLINE* outline = tblob->outlines; outline != nullptr;
          outline = outline->next) {
       EDGEPT* edgept = outline->loop;
       // Iterate over the edges.
       do {
         if (!edgept->IsHidden() || !edgept->prev->IsHidden()) {
           ICOORD pos(edgept->pos.x, edgept->pos.y);
-          if (denorm != NULL) {
-            TPOINT denormed;
-            denorm->DenormTransform(edgept->pos, &denormed);
-            pos.set_x(denormed.x);
-            pos.set_y(denormed.y);
-          }
+          TPOINT denormed;
+          tblob->denorm().DenormTransform(nullptr, edgept->pos, &denormed);
+          pos.set_x(denormed.x);
+          pos.set_y(denormed.y);
           TBOX pt_box(pos, pos);
           blob_box += pt_box;
         }
@@ -99,37 +84,6 @@ BoxWord* BoxWord::CopyFromNormalized(const DENORM* denorm,
   }
   boxword->ComputeBoundingBox();
   return boxword;
-}
-
-// Sets up the script_pos_ member using the tessword to get the bln
-// bounding boxes, the best_choice to get the unichars, and the unicharset
-// to get the target positions. If small_caps is true, sub/super are not
-// considered, but dropcaps are.
-void BoxWord::SetScriptPositions(const UNICHARSET& unicharset, bool small_caps,
-                                 TWERD* tessword, WERD_CHOICE* best_choice) {
-  // Allocate memory.
-  script_pos_.init_to_size(length_, SP_NORMAL);
-
-  int blob_index = 0;
-  for (TBLOB* tblob = tessword->blobs; tblob != NULL; tblob = tblob->next,
-       ++blob_index) {
-    int class_id = best_choice->unichar_id(blob_index);
-    TBOX blob_box = tblob->bounding_box();
-    int top = blob_box.top();
-    int bottom = blob_box.bottom();
-    int min_bottom, max_bottom, min_top, max_top;
-    unicharset.get_top_bottom(class_id, &min_bottom, &max_bottom,
-                              &min_top, &max_top);
-    if (bottom <= kMaxDropCapBottom) {
-      script_pos_[blob_index] = SP_DROPCAP;
-    } else if (!small_caps) {
-      if (top + kMinSubscriptOffset < min_top) {
-        script_pos_[blob_index] = SP_SUBSCRIPT;
-      } else if (bottom - kMinSuperscriptOffset > max_bottom) {
-        script_pos_[blob_index] = SP_SUPERSCRIPT;
-      }
-    }
-  }
 }
 
 // Clean up the bounding boxes from the polygonal approximation by
@@ -146,7 +100,7 @@ void BoxWord::ClipToOriginalWord(const BLOCK* block, WERD* original_word) {
     C_BLOB_IT b_it(original_word->cblob_list());
     for (b_it.mark_cycle_pt(); !b_it.cycled_list(); b_it.forward()) {
       TBOX blob_box = b_it.data()->bounding_box();
-      if (block != NULL)
+      if (block != nullptr)
         blob_box.rotate(block->re_rotation());
       if (blob_box.major_overlap(box)) {
         original_box += blob_box;
@@ -165,7 +119,7 @@ void BoxWord::ClipToOriginalWord(const BLOCK* block, WERD* original_word) {
         box.set_bottom(original_box.bottom());
     }
     original_box = original_word->bounding_box();
-    if (block != NULL)
+    if (block != nullptr)
       original_box.rotate(block->re_rotation());
     boxes_[i] = box.intersection(original_box);
   }
@@ -200,6 +154,13 @@ void BoxWord::InsertBox(int index, const TBOX& box) {
   ComputeBoundingBox();
 }
 
+// Changes the box at the given index to the new box.
+// Recomputes the bounding box.
+void BoxWord::ChangeBox(int index, const TBOX& box) {
+  boxes_[index] = box;
+  ComputeBoundingBox();
+}
+
 // Deletes the box with the given index, and shuffles up the rest.
 // Recomputes the bounding box.
 void BoxWord::DeleteBox(int index) {
@@ -228,9 +189,8 @@ void BoxWord::ComputeBoundingBox() {
 // The callback is deleted on completion.
 void BoxWord::ProcessMatchedBlobs(const TWERD& other,
                                   TessCallback1<int>* cb) const {
-  TBLOB* blob = other.blobs;
-  for (int i = 0; i < length_ && blob != NULL; ++i, blob = blob->next) {
-    TBOX blob_box = blob->bounding_box();
+  for (int i = 0; i < length_ && i < other.NumBlobs(); ++i) {
+    TBOX blob_box = other.blobs[i]->bounding_box();
     if (blob_box == boxes_[i])
       cb->Run(i);
   }
@@ -238,5 +198,3 @@ void BoxWord::ProcessMatchedBlobs(const TWERD& other,
 }
 
 }  // namespace tesseract.
-
-

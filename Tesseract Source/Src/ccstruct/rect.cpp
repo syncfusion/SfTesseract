@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        rect.c  (Formerly box.c)
+ * File:        rect.cpp  (Formerly box.c)
  * Description: Bounding box class definition.
- * Author:					Phil Cheatle
- * Created:					Wed Oct 16 15:18:45 BST 1991
+ * Author:      Phil Cheatle
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,8 +16,8 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     // precompiled headers
-#include          "rect.h"
+#include "rect.h"
+#include "strngs.h"     // for STRING
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
@@ -30,10 +29,10 @@
  *
  **********************************************************************/
 
-TBOX::TBOX(                   //construtor
-         const ICOORD pt1,  //one corner
-         const ICOORD pt2   //the other corner
-        ) {
+TBOX::TBOX(            // constructor
+    const ICOORD pt1,  // one corner
+    const ICOORD pt2   // the other corner
+    ) {
   if (pt1.x () <= pt2.x ()) {
     if (pt1.y () <= pt2.y ()) {
       bot_left = pt1;
@@ -63,7 +62,7 @@ TBOX::TBOX(                   //construtor
  **********************************************************************/
 
 TBOX::TBOX(                    //constructor
-    inT16 left, inT16 bottom, inT16 right, inT16 top)
+    int16_t left, int16_t bottom, int16_t right, int16_t top)
     : bot_left(left, bottom), top_right(right, top) {
 }
 
@@ -87,10 +86,10 @@ void TBOX::rotate_large(const FCOORD& vec) {
 
 TBOX TBOX::intersection(  //shared area box
                       const TBOX &box) const {
-  inT16 left;
-  inT16 bottom;
-  inT16 right;
-  inT16 top;
+  int16_t left;
+  int16_t bottom;
+  int16_t right;
+  int16_t top;
   if (overlap (box)) {
     if (box.bot_left.x () > bot_left.x ())
       left = box.bot_left.x ();
@@ -113,10 +112,10 @@ TBOX TBOX::intersection(  //shared area box
       top = top_right.y ();
   }
   else {
-    left = MAX_INT16;
-    bottom = MAX_INT16;
-    top = -MAX_INT16;
-    right = -MAX_INT16;
+    left = INT16_MAX;
+    bottom = INT16_MAX;
+    top = -INT16_MAX;
+    right = -INT16_MAX;
   }
   return TBOX (left, bottom, right, top);
 }
@@ -171,6 +170,16 @@ void TBOX::plot(                      //paint box
   plot(fd);
 }
 #endif
+
+// Appends the bounding box as (%d,%d)->(%d,%d) to a STRING.
+void TBOX::print_to_str(STRING *str) const {
+  // "(%d,%d)->(%d,%d)", left(), bottom(), right(), top()
+  str->add_str_int("(", left());
+  str->add_str_int(",", bottom());
+  str->add_str_int(")->(", right());
+  str->add_str_int(",", top());
+  *str += ')';
+}
 
 // Writes to the given file. Returns false in case of error.
 bool TBOX::Serialize(FILE* fp) const {
@@ -233,10 +242,10 @@ TBOX& operator&=(TBOX& op1, const TBOX& op2) {
       op1.top_right.set_y (op2.top_right.y ());
   }
   else {
-    op1.bot_left.set_x (MAX_INT16);
-    op1.bot_left.set_y (MAX_INT16);
-    op1.top_right.set_x (-MAX_INT16);
-    op1.top_right.set_y (-MAX_INT16);
+    op1.bot_left.set_x (INT16_MAX);
+    op1.bot_left.set_y (INT16_MAX);
+    op1.top_right.set_x (-INT16_MAX);
+    op1.top_right.set_y (-INT16_MAX);
   }
   return op1;
 }

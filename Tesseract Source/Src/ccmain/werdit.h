@@ -1,8 +1,8 @@
 /**********************************************************************
- * File:			wordit.c
+ * File:        wordit.h
  * Description: An iterator for passing over all the words in a document.
- * Author:		Ray Smith
- * Created:		Mon Apr 27 08:51:22 BST 1992
+ * Author:      Ray Smith
+ * Created:     Mon Apr 27 08:51:22 BST 1992
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,15 +17,13 @@
  *
  **********************************************************************/
 
-#ifndef           WERDIT_H
-#define           WERDIT_H
+#ifndef WERDIT_H
+#define WERDIT_H
 
-#include          "pageres.h"
-#include          "notdll.h"
+#include "rect.h"  // for TBOX
+class PAGE_RES;
+class PAGE_RES_IT;
 
-WERD *make_pseudo_word(PAGE_RES* page_res,  // blocks to check
-                       TBOX &selection_box,
-                       BLOCK *&pseudo_block,
-                       ROW *&pseudo_row);
+PAGE_RES_IT* make_pseudo_word(PAGE_RES* page_res, const TBOX& selection_box);
 
 #endif

@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        blobbox.h  (Formerly blobnbox.h)
  * Description: Code for the textord blob class.
- * Author:					Ray Smith
- * Created:					Thu Jul 30 09:08:51 BST 1992
+ * Author:      Ray Smith
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +16,30 @@
  *
  **********************************************************************/
 
-#ifndef           BLOBBOX_H
-#define           BLOBBOX_H
+#ifndef BLOBBOX_H
+#define BLOBBOX_H
 
-#include          "clst.h"
-#include          "elst2.h"
-#include          "werd.h"
-#include          "ocrblock.h"
-#include          "statistc.h"
+#include <cinttypes>           // for PRId32
+#include <cmath>               // for std::sqrt
+#include <cstdint>             // for int16_t, int32_t
+#include "elst.h"              // for ELIST_ITERATOR, ELISTIZEH, ELIST_LINK
+#include "elst2.h"             // for ELIST2_ITERATOR, ELIST2IZEH, ELIST2_LINK
+#include "errcode.h"           // for ASSERT_HOST
+#include "ocrblock.h"          // for BLOCK
+#include "params.h"            // for DoubleParam, double_VAR_H
+#include "pdblock.h"           // for PDBLK
+#include "points.h"            // for FCOORD, ICOORD, ICOORDELT_LIST
+#include "quspline.h"          // for QSPLINE
+#include "rect.h"              // for TBOX
+#include "scrollview.h"        // for ScrollView, ScrollView::Color
+#include "statistc.h"          // for STATS
+#include "stepblob.h"          // for C_BLOB
+#include "tprintf.h"           // for tprintf
+#include "werd.h"              // for WERD_LIST
+
+class C_OUTLINE;
+
+struct Pix;
 
 enum PITCH_TYPE
 {
@@ -129,16 +144,19 @@ class BLOBNBOX:public ELIST_LINK
 {
   public:
     BLOBNBOX() {
-      ConstructionInit();
+      ReInit();
     }
     explicit BLOBNBOX(C_BLOB *srcblob) {
       box = srcblob->bounding_box();
-      ConstructionInit();
+      ReInit();
       cblob_ptr = srcblob;
       area = static_cast<int>(srcblob->area());
     }
+    ~BLOBNBOX() {
+      if (owns_cblob_) delete cblob_ptr;
+    }
     static BLOBNBOX* RealBlob(C_OUTLINE* outline) {
-      C_BLOB* blob = new C_BLOB(outline);
+      auto* blob = new C_BLOB(outline);
       return new BLOBNBOX(blob);
     }
 
@@ -183,7 +201,7 @@ class BLOBNBOX:public ELIST_LINK
 
     // Returns true if the blob is noise and has no owner.
     bool DeletableNoise() const {
-      return owner() == NULL && region_type() == BRT_NOISE;
+      return owner() == nullptr && region_type() == BRT_NOISE;
     }
 
     // Returns true, and sets vert_possible/horz_possible if the blob has some
@@ -204,6 +222,10 @@ class BLOBNBOX:public ELIST_LINK
     // given horizontal range.
     TBOX BoundsWithinLimits(int left, int right);
 
+    // Estimates and stores the baseline position based on the shape of the
+    // outline.
+    void EstimateBaselinePosition();
+
     // Simple accessors.
     const TBOX& bounding_box() const {
       return box;
@@ -219,22 +241,23 @@ class BLOBNBOX:public ELIST_LINK
       box = cblob_ptr->bounding_box();
       base_char_top_ = box.top();
       base_char_bottom_ = box.bottom();
+      baseline_y_ = box.bottom();
     }
     const TBOX& reduced_box() const {
       return red_box;
     }
     void set_reduced_box(TBOX new_box) {
       red_box = new_box;
-      reduced = TRUE;
+      reduced = true;
     }
-    inT32 enclosed_area() const {
+    int32_t enclosed_area() const {
       return area;
     }
     bool joined_to_prev() const {
-      return joined != 0;
+      return joined;
     }
     bool red_box_set() const {
-      return reduced != 0;
+      return reduced;
     }
     int repeated_set() const {
       return repeated_set_;
@@ -363,6 +386,9 @@ class BLOBNBOX:public ELIST_LINK
     int base_char_bottom() const {
       return base_char_bottom_;
     }
+    int baseline_position() const {
+      return baseline_y_;
+    }
     int line_crossings() const {
       return line_crossings_;
     }
@@ -379,6 +405,7 @@ class BLOBNBOX:public ELIST_LINK
     void set_base_char_blob(BLOBNBOX* blob) {
       base_char_blob_ = blob;
     }
+    void set_owns_cblob(bool value) { owns_cblob_ = value; }
 
     bool UniquelyVertical() const {
       return vert_possible_ && !horz_possible_;
@@ -407,6 +434,10 @@ class BLOBNBOX:public ELIST_LINK
     static void CleanNeighbours(BLOBNBOX_LIST* blobs);
     // Helper to delete all the deletable blobs on the list.
     static void DeleteNoiseBlobs(BLOBNBOX_LIST* blobs);
+    // Helper to compute edge offsets for  all the blobs on the list.
+    // See coutln.h for an explanation of edge offsets.
+    static void ComputeEdgeOffsets(Pix* thresholds, Pix* grey,
+                                   BLOBNBOX_LIST* blobs);
 
 #ifndef GRAPHICS_DISABLED
     // Helper to draw all the blobs on the list in the given body_colour,
@@ -431,22 +462,9 @@ class BLOBNBOX:public ELIST_LINK
 
     void plot(ScrollView* window,                // window to draw in
               ScrollView::Color blob_colour,     // for outer bits
-              ScrollView::Color child_colour) {  // for holes
-      if (cblob_ptr != NULL)
-        cblob_ptr->plot(window, blob_colour, child_colour);
-    }
+              ScrollView::Color child_colour);   // for holes
 #endif
 
-  // Initializes the bulk of the members to default values for use at
-  // construction time.
-  void ConstructionInit() {
-    cblob_ptr = NULL;
-    area = 0;
-    area_stroke_width_ = 0.0f;
-    horz_stroke_width_ = 0.0f;
-    vert_stroke_width_ = 0.0f;
-    ReInit();
-  }
   // Initializes members set by StrokeWidth and beyond, without discarding
   // stored area and strokewidth values, which are expensive to calculate.
   void ReInit() {
@@ -462,13 +480,15 @@ class BLOBNBOX:public ELIST_LINK
     right_rule_ = 0;
     left_crossing_rule_ = 0;
     right_crossing_rule_ = 0;
-    if (area_stroke_width_ == 0.0f && area > 0 && cblob() != NULL)
+    if (area_stroke_width_ == 0.0f && area > 0 && cblob() != nullptr
+        && cblob()->perimeter()!=0)
       area_stroke_width_ = 2.0f * area / cblob()->perimeter();
-    owner_ = NULL;
+    owner_ = nullptr;
     base_char_top_ = box.top();
     base_char_bottom_ = box.bottom();
+    baseline_y_ = box.bottom();
     line_crossings_ = 0;
-    base_char_blob_ = NULL;
+    base_char_blob_ = nullptr;
     horz_possible_ = false;
     vert_possible_ = false;
     leader_on_left_ = false;
@@ -478,42 +498,47 @@ class BLOBNBOX:public ELIST_LINK
 
   void ClearNeighbours() {
     for (int n = 0; n < BND_COUNT; ++n) {
-      neighbours_[n] = NULL;
+      neighbours_[n] = nullptr;
       good_stroke_neighbours_[n] = false;
     }
   }
 
  private:
-  C_BLOB *cblob_ptr;            // edgestep blob
+  C_BLOB* cblob_ptr = nullptr;  // edgestep blob
   TBOX box;                     // bounding box
   TBOX red_box;                 // bounding box
-  int area:30;                  // enclosed area
-  int joined:1;                 // joined to prev
-  int reduced:1;                // reduced box set
-  int repeated_set_;            // id of the set of repeated blobs
-  TabType left_tab_type_;       // Indicates tab-stop assessment
-  TabType right_tab_type_;      // Indicates tab-stop assessment
-  BlobRegionType region_type_;  // Type of region this blob belongs to
-  BlobTextFlowType flow_;       // Quality of text flow.
-  inT16 left_rule_;             // x-coord of nearest but not crossing rule line
-  inT16 right_rule_;            // x-coord of nearest but not crossing rule line
-  inT16 left_crossing_rule_;    // x-coord of nearest or crossing rule line
-  inT16 right_crossing_rule_;   // x-coord of nearest or crossing rule line
-  inT16 base_char_top_;         // y-coord of top/bottom of diacritic base,
-  inT16 base_char_bottom_;      // if it exists else top/bottom of this blob.
-  int line_crossings_;          // Number of line intersections touched.
-  BLOBNBOX* base_char_blob_;    // The blob that was the base char.
-  float horz_stroke_width_;     // Median horizontal stroke width
-  float vert_stroke_width_;     // Median vertical stroke width
-  float area_stroke_width_;     // Stroke width from area/perimeter ratio.
-  tesseract::ColPartition* owner_;  // Who will delete me when I am not needed
+  int32_t area = 0;             // enclosed area
+  int32_t repeated_set_ = 0;    // id of the set of repeated blobs
+  TabType left_tab_type_ = TT_NONE;  // Indicates tab-stop assessment
+  TabType right_tab_type_ = TT_NONE; // Indicates tab-stop assessment
+  BlobRegionType region_type_ = BRT_UNKNOWN; // Type of region this blob belongs to
+  BlobTextFlowType flow_ = BTFT_NONE;       // Quality of text flow.
   BlobSpecialTextType spt_type_;   // Special text type.
+  bool joined = false;          // joined to prev
+  bool reduced = false;         // reduced box set
+  int16_t left_rule_ = 0;           // x-coord of nearest but not crossing rule line
+  int16_t right_rule_ = 0;          // x-coord of nearest but not crossing rule line
+  int16_t left_crossing_rule_;  // x-coord of nearest or crossing rule line
+  int16_t right_crossing_rule_; // x-coord of nearest or crossing rule line
+  int16_t base_char_top_;       // y-coord of top/bottom of diacritic base,
+  int16_t base_char_bottom_;    // if it exists else top/bottom of this blob.
+  int16_t baseline_y_;          // Estimate of baseline position.
+  int32_t line_crossings_;      // Number of line intersections touched.
+  BLOBNBOX* base_char_blob_;    // The blob that was the base char.
+  tesseract::ColPartition* owner_;  // Who will delete me when I am not needed
   BLOBNBOX* neighbours_[BND_COUNT];
+  float horz_stroke_width_ = 0.0f; // Median horizontal stroke width
+  float vert_stroke_width_ = 0.0f; // Median vertical stroke width
+  float area_stroke_width_ = 0.0f; // Stroke width from area/perimeter ratio.
   bool good_stroke_neighbours_[BND_COUNT];
   bool horz_possible_;           // Could be part of horizontal flow.
   bool vert_possible_;           // Could be part of vertical flow.
   bool leader_on_left_;          // There is a leader to the left.
   bool leader_on_right_;         // There is a leader to the right.
+  // Iff true, then the destructor should delete the cblob_ptr.
+  // TODO(rays) migrate all uses to correctly setting this flag instead of
+  // deleting the C_BLOB before deleting the BLOBNBOX.
+  bool owns_cblob_ = false;
 };
 
 class TO_ROW: public ELIST2_LINK
@@ -530,6 +555,7 @@ class TO_ROW: public ELIST2_LINK
            float bottom,
            float row_size);
 
+    void print() const;
     float max_y() const {  //access function
       return y_max;
     }
@@ -589,9 +615,8 @@ class TO_ROW: public ELIST2_LINK
                            float new_error) {
       para_c = new_c;
       para_error = new_error;
-      credibility =
-        (float) (blobs.length () - kErrorWeight * new_error);
-      y_origin = (float) (new_c / sqrt (1 + gradient * gradient));
+      credibility = blobs.length() -  kErrorWeight * new_error;
+      y_origin = new_c / std::sqrt(1 + gradient * gradient);
       //real intercept
     }
     void set_limits(                  //set min,max
@@ -617,11 +642,11 @@ class TO_ROW: public ELIST2_LINK
     }
 
                                  // true when dead
-    BOOL8 merged;
-    BOOL8 all_caps;              // had no ascenders
-    BOOL8 used_dm_model;         // in guessing pitch
-    inT16 projection_left;       // start of projection
-    inT16 projection_right;      // start of projection
+    bool merged = false;
+    bool all_caps;              // had no ascenders
+    bool used_dm_model;         // in guessing pitch
+    int16_t projection_left;       // start of projection
+    int16_t projection_right;      // start of projection
     PITCH_TYPE pitch_decision;   // how strong is decision
     float fixed_pitch;           // pitch or 0
     float fp_space;              // sp if fixed pitch
@@ -635,9 +660,9 @@ class TO_ROW: public ELIST2_LINK
     float descdrop;              // descenders
     float body_size;             // of CJK characters.  Assumed to be
                                  // xheight+ascrise for non-CJK text.
-    inT32 min_space;             // min size for real space
-    inT32 max_nonspace;          // max size of non-space
-    inT32 space_threshold;       // space vs nonspace
+    int32_t min_space;             // min size for real space
+    int32_t max_nonspace;          // max size of non-space
+    int32_t space_threshold;       // space vs nonspace
     float kern_size;             // average non-space
     float space_size;            // average space
     WERD_LIST rep_words;         // repeated chars
@@ -684,19 +709,19 @@ class TO_BLOCK:public ELIST_LINK
     // median size statistic from the blobs list.
     void rotate(const FCOORD& rotation) {
       BLOBNBOX_LIST* blobnbox_list[] = {&blobs, &underlines, &noise_blobs,
-                                        &small_blobs, &large_blobs, NULL};
-      for (BLOBNBOX_LIST** list = blobnbox_list; *list != NULL; ++list) {
+                                        &small_blobs, &large_blobs, nullptr};
+      for (BLOBNBOX_LIST** list = blobnbox_list; *list != nullptr; ++list) {
         BLOBNBOX_IT it(*list);
         for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
           it.data()->rotate(rotation);
         }
       }
       // Rotate the block
-      ASSERT_HOST(block->poly_block() != NULL);
+      ASSERT_HOST(block->pdblk.poly_block() != nullptr);
       block->rotate(rotation);
       // Update the median size statistic from the blobs list.
-      STATS widths(0, block->bounding_box().width());
-      STATS heights(0, block->bounding_box().height());
+      STATS widths(0, block->pdblk.bounding_box().width());
+      STATS heights(0, block->pdblk.bounding_box().height());
       BLOBNBOX_IT blob_it(&blobs);
       for (blob_it.mark_cycle_pt(); !blob_it.cycled_list(); blob_it.forward()) {
         widths.add(blob_it.data()->bounding_box().width(), 1);
@@ -710,12 +735,12 @@ class TO_BLOCK:public ELIST_LINK
       TO_ROW_IT row_it = &row_list;
       TO_ROW *row;
 
-      for (row_it.mark_cycle_pt (); !row_it.cycled_list ();
-      row_it.forward ()) {
-        row = row_it.data ();
-        printf ("Row range (%g,%g), para_c=%g, blobcount=" INT32FORMAT
-          "\n", row->min_y (), row->max_y (), row->parallel_c (),
-          row->blob_list ()->length ());
+      for (row_it.mark_cycle_pt(); !row_it.cycled_list();
+           row_it.forward()) {
+        row = row_it.data();
+        tprintf("Row range (%g,%g), para_c=%g, blobcount=%" PRId32 "\n",
+                row->min_y(), row->max_y(), row->parallel_c(),
+                row->blob_list()->length());
       }
     }
 
@@ -727,6 +752,15 @@ class TO_BLOCK:public ELIST_LINK
 
     // Deletes noise blobs from all lists where not owned by a ColPartition.
     void DeleteUnownedNoise();
+
+    // Computes and stores the edge offsets on each blob for use in feature
+    // extraction, using greyscale if the supplied grey and thresholds pixes
+    // are 8-bit or otherwise (if nullptr or not 8 bit) the original binary
+    // edge step outlines.
+    // Thresholds must either be the same size as grey or an integer down-scale
+    // of grey.
+    // See coutln.h for an explanation of edge offsets.
+    void ComputeEdgeOffsets(Pix* thresholds, Pix* grey);
 
 #ifndef GRAPHICS_DISABLED
     // Draw the noise blobs from all lists in red.
@@ -755,8 +789,8 @@ class TO_BLOCK:public ELIST_LINK
     float fixed_pitch;           //pitch or 0
     float kern_size;             //average non-space
     float space_size;            //average space
-    inT32 min_space;             //min definite space
-    inT32 max_nonspace;          //max definite
+    int32_t min_space;             //min definite space
+    int32_t max_nonspace;          //max definite
     float fp_space;              //sp if fixed pitch
     float fp_nonsp;              //nonsp if fixed pitch
     float pr_space;              //sp if prop

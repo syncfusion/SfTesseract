@@ -1,13 +1,8 @@
 /*****************************************************************************
  *
- * File:        blkocc.cpp  (Formerly blockocc.c)
+ * File:         blkocc.cpp  (Formerly blockocc.c)
  * Description:  Block Occupancy routines
  * Author:       Chris Newton
- * Created:      Fri Nov 8
- * Modified:
- * Language:     C++
- * Package:      N/A
- * Status:       Experimental (Do Not Distribute)
  *
  * (c) Copyright 1991, Hewlett-Packard Company.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,14 +23,12 @@
 ----------------------------------------------------------------------
 */
 
-#include "mfcpch.h"
-#include <ctype.h>
-#include <math.h>
+#include <cctype>
+#include <cmath>
 #include "errcode.h"
 #include "drawtord.h"
 #include "blkocc.h"
 #include "helpers.h"
-#include "notdll.h"
 
 double_VAR(textord_underline_threshold, 0.5, "Fraction of width occupied");
 
@@ -49,21 +42,21 @@ static void horizontal_coutline_projection(C_OUTLINE *outline,
  * test_underline
  *
  * Check to see if the blob is an underline.
- * Return TRUE if it is.
+ * Return true if it is.
  */
 
-BOOL8 test_underline(                   //look for underlines
-                     BOOL8 testing_on,  //< drawing blob
-                     C_BLOB *blob,      //< blob to test
-                     inT16 baseline,    //< coords of baseline
-                     inT16 xheight      //< height of line
-                    ) {
-  inT16 occ;
-  inT16 blob_width;              //width of blob
+bool test_underline(                   //look for underlines
+        bool testing_on,   ///< drawing blob
+        C_BLOB* blob,      ///< blob to test
+        int16_t baseline,  ///< coords of baseline
+        int16_t xheight    ///< height of line
+) {
+  int16_t occ;
+  int16_t blob_width;             //width of blob
   TBOX blob_box;                  //bounding box
-  inT32 desc_occ;
-  inT32 x_occ;
-  inT32 asc_occ;
+  int32_t desc_occ;
+  int32_t x_occ;
+  int32_t asc_occ;
   STATS projection;
 
   blob_box = blob->bounding_box ();
@@ -108,11 +101,10 @@ BOOL8 test_underline(                   //look for underlines
   }
   if (desc_occ > x_occ + x_occ
     && desc_occ > blob_width * textord_underline_threshold)
-    return TRUE;                 //real underline
-  if (asc_occ > x_occ + x_occ
-    && asc_occ > blob_width * textord_underline_threshold)
-    return TRUE;                 //overline
-  return FALSE;                  //neither
+    return true;                 //real underline
+  return asc_occ > x_occ + x_occ &&
+         asc_occ > blob_width * textord_underline_threshold;                 //overline
+  //neither
 }
 
 
@@ -124,8 +116,8 @@ BOOL8 test_underline(                   //look for underlines
  */
 
 static void horizontal_cblob_projection(               //project outlines
-                                 C_BLOB *blob,  //< blob to project
-                                 STATS *stats   //< output
+                                 C_BLOB *blob,  ///< blob to project
+                                 STATS *stats   ///< output
                                 ) {
                                  //outlines of blob
   C_OUTLINE_IT out_it = blob->out_list ();
@@ -144,13 +136,13 @@ static void horizontal_cblob_projection(               //project outlines
  */
 
 static void horizontal_coutline_projection(                     //project outlines
-                                    C_OUTLINE *outline,  //< outline to project
-                                    STATS *stats         //< output
+                                    C_OUTLINE *outline,  ///< outline to project
+                                    STATS *stats         ///< output
                                    ) {
   ICOORD pos;                    //current point
   ICOORD step;                   //edge step
-  inT32 length;                  //of outline
-  inT16 stepindex;               //current step
+  int32_t length;                //of outline
+  int16_t stepindex;             //current step
   C_OUTLINE_IT out_it = outline->child ();
 
   pos = outline->start_pos ();

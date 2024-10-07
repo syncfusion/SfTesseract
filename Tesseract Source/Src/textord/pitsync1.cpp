@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        pitsync1.cpp  (Formerly pitsync.c)
  * Description: Code to find the optimum fixed pitch segmentation of some blobs.
- * Author:		Ray Smith
- * Created:		Thu Nov 19 11:48:05 GMT 1992
+ * Author:      Ray Smith
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,28 +16,17 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
-#include          <math.h>
-#include          "memry.h"
-#include          "pitsync1.h"
-
-#include          "notdll.h"
+#include <cfloat>      // for FLT_MAX
+#include <cmath>
+#include "pitsync1.h"
 
 ELISTIZE (FPSEGPT) CLISTIZE (FPSEGPT_LIST)
-#define EXTERN
-EXTERN
-INT_VAR (pitsync_linear_version, 6, "Use new fast algorithm");
-EXTERN
-double_VAR (pitsync_joined_edge, 0.75,
-"Dist inside big blob for chopping");
-EXTERN
-double_VAR (pitsync_offset_freecut_fraction, 0.25,
-"Fraction of cut for free cuts");
-EXTERN
-INT_VAR (pitsync_fake_depth, 1, "Max advance fake generation");
+
+INT_VAR(pitsync_linear_version, 6, "Use new fast algorithm");
+double_VAR(pitsync_joined_edge, 0.75, "Dist inside big blob for chopping");
+double_VAR(pitsync_offset_freecut_fraction, 0.25,
+  "Fraction of cut for free cuts");
+INT_VAR(pitsync_fake_depth, 1, "Max advance fake generation");
 
 /**********************************************************************
  * FPSEGPT::FPSEGPT
@@ -50,7 +38,7 @@ INT_VAR (pitsync_fake_depth, 1, "Max advance fake generation");
 FPSEGPT::FPSEGPT(                //constructor
                  FPCUTPT *cutpt  //create from new form
                 ) {
-  pred = NULL;
+  pred = nullptr;
   mean_sum = cutpt->sum ();
   sq_sum = cutpt->squares ();
   cost = cutpt->cost_function ();
@@ -69,14 +57,14 @@ FPSEGPT::FPSEGPT(                //constructor
  **********************************************************************/
 
 FPSEGPT::FPSEGPT (               //constructor
-inT16 x                          //position
+int16_t x                        //position
 ):xpos (x) {
-  pred = NULL;
+  pred = nullptr;
   mean_sum = 0;
   sq_sum = 0;
   cost = 0;
-  faked = FALSE;
-  terminal = FALSE;
+  faked = false;
+  terminal = false;
   fake_count = 0;
   mid_cuts = 0;
 }
@@ -89,28 +77,33 @@ inT16 x                          //position
  **********************************************************************/
 
 FPSEGPT::FPSEGPT (               //constructor
-inT16 x,                         //position
-BOOL8 faking,                    //faking this one
-inT16 offset,                    //dist to gap
-inT16 region_index,              //segment number
-inT16 pitch,                     //proposed pitch
-inT16 pitch_error,               //allowed tolerance
+int16_t x,                       //position
+bool faking,                     //faking this one
+int16_t offset,                  //dist to gap
+int16_t region_index,            //segment number
+int16_t pitch,                   //proposed pitch
+int16_t pitch_error,             //allowed tolerance
 FPSEGPT_LIST * prev_list         //previous segment
-):xpos (x) {
-  inT16 best_fake;               //on previous
+)
+: fake_count(0),
+  xpos(x),
+  mean_sum(0.0),
+  sq_sum(0.0)
+{
+  int16_t best_fake;             //on previous
   FPSEGPT *segpt;                //segment point
-  inT32 dist;                    //from prev segment
+  int32_t dist;                  //from prev segment
   double sq_dist;                //squared distance
   double mean;                   //mean pitch
   double total;                  //total dists
   double factor;                 //cost function
   FPSEGPT_IT pred_it = prev_list;//for previuos segment
 
-  cost = MAX_FLOAT32;
-  pred = NULL;
+  cost = FLT_MAX;
+  pred = nullptr;
   faked = faking;
-  terminal = FALSE;
-  best_fake = MAX_INT16;
+  terminal = false;
+  best_fake = INT16_MAX;
   mid_cuts = 0;
   for (pred_it.mark_cycle_pt (); !pred_it.cycled_list (); pred_it.forward ()) {
     segpt = pred_it.data ();
@@ -136,9 +129,8 @@ FPSEGPT_LIST * prev_list         //previous segment
     }
   }
   if (fake_count > best_fake + 1)
-    pred = NULL;                 //fail it
+    pred = nullptr;                 //fail it
 }
-
 
 /**********************************************************************
  * check_pitch_sync
@@ -150,28 +142,28 @@ FPSEGPT_LIST * prev_list         //previous segment
 
 double check_pitch_sync(                        //find segmentation
                         BLOBNBOX_IT *blob_it,   //blobs to do
-                        inT16 blob_count,       //no of blobs
-                        inT16 pitch,            //pitch estimate
-                        inT16 pitch_error,      //tolerance
+                        int16_t blob_count,     //no of blobs
+                        int16_t pitch,          //pitch estimate
+                        int16_t pitch_error,    //tolerance
                         STATS *projection,      //vertical
                         FPSEGPT_LIST *seg_list  //output list
                        ) {
-  inT16 x;                       //current coord
-  inT16 min_index;               //blob number
-  inT16 max_index;               //blob number
-  inT16 left_edge;               //of word
-  inT16 right_edge;              //of word
-  inT16 right_max;               //max allowed x
-  inT16 min_x;                   //in this region
-  inT16 max_x;
-  inT16 region_index;
-  inT16 best_region_index = 0;   //for best result
-  inT16 offset;                  //dist to legal area
-  inT16 left_best_x;             //edge of good region
-  inT16 right_best_x;            //right edge
-  TBOX min_box;                   //bounding box
-  TBOX max_box;                   //bounding box
-  TBOX next_box;                  //box of next blob
+  int16_t x;                     //current coord
+  int16_t min_index;             //blob number
+  int16_t max_index;             //blob number
+  int16_t left_edge;             //of word
+  int16_t right_edge;            //of word
+  int16_t right_max;             //max allowed x
+  int16_t min_x;                 //in this region
+  int16_t max_x;
+  int16_t region_index;
+  int16_t best_region_index = 0; //for best result
+  int16_t offset;                //dist to legal area
+  int16_t left_best_x;           //edge of good region
+  int16_t right_best_x;          //right edge
+  TBOX min_box;                  //bounding box
+  TBOX max_box;                  //bounding box
+  TBOX next_box;                 //box of next blob
   FPSEGPT *segpt;                //segment point
   FPSEGPT_LIST *segpts;          //points in a segment
   double best_cost;              //best path
@@ -189,7 +181,7 @@ double check_pitch_sync(                        //find segmentation
   //      tprintf("Computing sync on word of %d blobs with pitch %d\n",
   //              blob_count, pitch);
   //      if (blob_count==8 && pitch==27)
-  //              projection->print(stdout,TRUE);
+  //              projection->print(stdout,true);
   if (pitch < 3)
     pitch = 3;                   //nothing ludicrous
   if ((pitch - 3) / 2 < pitch_error)
@@ -225,8 +217,8 @@ double check_pitch_sync(                        //find segmentation
   lattice_it.add_before_then_move (segpts);
   min_index = 0;
   region_index = 1;
-  best_cost = MAX_FLOAT32;
-  best_end = NULL;
+  best_cost = FLT_MAX;
+  best_end = nullptr;
   min_it = *blob_it;
   min_box = box_next (&min_it);  //first box
   do {
@@ -269,18 +261,18 @@ double check_pitch_sync(                        //find segmentation
         else
           offset = 0;
         //                              offset=pitsync_offset_freecut_fraction*projection->pile_count(x);
-        segpt = new FPSEGPT (x, FALSE, offset, region_index,
+        segpt = new FPSEGPT (x, false, offset, region_index,
           pitch, pitch_error, lattice_it.data ());
       }
       else {
         offset = projection->pile_count (x);
-        segpt = new FPSEGPT (x, TRUE, offset, region_index,
+        segpt = new FPSEGPT (x, true, offset, region_index,
           pitch, pitch_error, lattice_it.data ());
       }
-      if (segpt->previous () != NULL) {
+      if (segpt->previous () != nullptr) {
         segpt_it.add_after_then_move (segpt);
         if (x >= right_edge - pitch_error) {
-          segpt->terminal = TRUE;//no more wanted
+          segpt->terminal = true;//no more wanted
           if (segpt->cost_function () < best_cost) {
             best_cost = segpt->cost_function ();
             //find least
@@ -299,7 +291,7 @@ double check_pitch_sync(                        //find segmentation
       }
     }
     if (segpts->empty ()) {
-      if (best_end != NULL)
+      if (best_end != nullptr)
         break;                   //already found one
       make_illegal_segment (lattice_it.data (), min_box, min_it,
         region_index, pitch, pitch_error, segpts);
@@ -320,7 +312,7 @@ double check_pitch_sync(                        //find segmentation
     region_index++;
   }
   while (min_x < right_edge);
-  ASSERT_HOST (best_end != NULL);//must always find some
+  ASSERT_HOST (best_end != nullptr);//must always find some
 
   for (lattice_it.mark_cycle_pt (); !lattice_it.cycled_list ();
   lattice_it.forward ()) {
@@ -346,7 +338,7 @@ double check_pitch_sync(                        //find segmentation
       best_end = segpt->previous ();
     }
   }
-  ASSERT_HOST (best_end == NULL);
+  ASSERT_HOST (best_end == nullptr);
   ASSERT_HOST (!outseg_it.empty ());
   outseg_it.move_to_last ();
   mean_sum = outseg_it.data ()->sum ();
@@ -368,17 +360,17 @@ double check_pitch_sync(                        //find segmentation
 
 void make_illegal_segment(                          //find segmentation
                           FPSEGPT_LIST *prev_list,  //previous segments
-                          TBOX blob_box,             //bounding box
+                          TBOX blob_box,            //bounding box
                           BLOBNBOX_IT blob_it,      //iterator
-                          inT16 region_index,       //number of segment
-                          inT16 pitch,              //pitch estimate
-                          inT16 pitch_error,        //tolerance
+                          int16_t region_index,     //number of segment
+                          int16_t pitch,            //pitch estimate
+                          int16_t pitch_error,      //tolerance
                           FPSEGPT_LIST *seg_list    //output list
                          ) {
-  inT16 x;                       //current coord
-  inT16 min_x = 0;               //in this region
-  inT16 max_x = 0;
-  inT16 offset;                  //dist to edge
+  int16_t x;                     //current coord
+  int16_t min_x = 0;             //in this region
+  int16_t max_x = 0;
+  int16_t offset;                //dist to edge
   FPSEGPT *segpt;                //segment point
   FPSEGPT *prevpt;               //previous point
   float best_cost;               //best path
@@ -386,7 +378,7 @@ void make_illegal_segment(                          //find segmentation
                                  //previous points
   FPSEGPT_IT prevpt_it = prev_list;
 
-  best_cost = MAX_FLOAT32;
+  best_cost = FLT_MAX;
   for (prevpt_it.mark_cycle_pt (); !prevpt_it.cycled_list ();
   prevpt_it.forward ()) {
     prevpt = prevpt_it.data ();
@@ -409,14 +401,14 @@ void make_illegal_segment(                          //find segmentation
     offset = x - blob_box.left ();
     if (blob_box.right () - x < offset)
       offset = blob_box.right () - x;
-    segpt = new FPSEGPT (x, FALSE, offset,
+    segpt = new FPSEGPT (x, false, offset,
       region_index, pitch, pitch_error, prev_list);
-    if (segpt->previous () != NULL) {
+    if (segpt->previous () != nullptr) {
       ASSERT_HOST (offset >= 0);
       fprintf (stderr, "made fake at %d\n", x);
                                  //make one up
       segpt_it.add_after_then_move (segpt);
-      segpt->faked = TRUE;
+      segpt->faked = true;
       segpt->fake_count++;
     }
     else

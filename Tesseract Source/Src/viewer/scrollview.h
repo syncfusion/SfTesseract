@@ -29,17 +29,12 @@
 // API calls at all and generate a java user interface from scratch (or
 // basically generate any kind of java program, possibly even dangerous ones).
 
-#ifndef TESSERACT_VIEWER_SCROLLVIEW_H__
-#define TESSERACT_VIEWER_SCROLLVIEW_H__
+#ifndef TESSERACT_VIEWER_SCROLLVIEW_H_
+#define TESSERACT_VIEWER_SCROLLVIEW_H_
 // TODO(rays) Move ScrollView into the tesseract namespace.
 #ifndef OCR_SCROLLVIEW_H__
 
-#include <stdio.h>
-
-// Include automatically generated configuration file if running autoconf.
-#ifdef HAVE_CONFIG_H
-#include "config_auto.h"
-#endif
+#include <cstdio>
 
 class ScrollView;
 class SVNetwork;
@@ -66,21 +61,17 @@ enum SVEventType {
 struct SVEvent {
   ~SVEvent() { delete [] parameter; }
   SVEvent* copy();
-  SVEventType type;    // What kind of event.
-  ScrollView* window;  // Window event relates to.
-  int x;               // Coords of click or selection.
-  int y;
-  int x_size;          // Size of selection.
-  int y_size;
-  int command_id;      // The ID of the possibly associated event (e.g. MENU)
-  char* parameter;     // Any string that might have been passed as argument.
-  int counter;         // Used to detect which kind of event to process next.
+  SVEventType type = SVET_DESTROY; // What kind of event.
+  ScrollView* window = nullptr; // Window event relates to.
+  char* parameter = nullptr; // Any string that might have been passed as argument.
+  int x = 0;           // Coords of click or selection.
+  int y = 0;
+  int x_size = 0;      // Size of selection.
+  int y_size = 0;
+  int command_id = 0;  // The ID of the possibly associated event (e.g. MENU)
+  int counter = 0;     // Used to detect which kind of event to process next.
 
-  SVEvent() {
-    window = NULL;
-    parameter = NULL;
-  }
-
+  SVEvent() = default;
   SVEvent(const SVEvent&);
   SVEvent& operator=(const SVEvent&);
 };
@@ -90,11 +81,11 @@ struct SVEvent {
 // called whenever an appropriate event occurs.
 class SVEventHandler {
   public:
-    virtual ~SVEventHandler() {}
+    virtual ~SVEventHandler();
 
 // Gets called by the SV Window. Does nothing on default, overwrite this
 // to implement the desired behaviour
-    virtual void Notify(const SVEvent* sve) { }
+    virtual void Notify(const SVEvent* sve) { (void)sve; }
 };
 
 // The ScrollView class provides the expernal API to the scrollviewer process.
@@ -159,6 +150,8 @@ class ScrollView {
     GREEN_YELLOW  // Make sure this one is last.
 };
 
+  ~ScrollView();
+
 #ifndef GRAPHICS_DISABLED
 
 // Create a window. The pixel size of the window may be 0,0, in which case
@@ -173,8 +166,6 @@ class ScrollView {
   ScrollView(const char* name, int x_pos, int y_pos, int x_size, int y_size,
              int x_canvas_size, int y_canvas_size, bool y_axis_reversed,
              const char* server_name);
-  ~ScrollView();
-
 /*******************************************************************************
 * Event handling
 * To register as listener, the class has to derive from the SVEventHandler
@@ -332,7 +323,7 @@ class ScrollView {
 // be unique among menubar eventIDs.
   void MenuItem(const char* parent, const char* name, int cmdEvent);
 
-// This adds a new checkbox entry, which might initally be flagged.
+  // This adds a new checkbox entry, which might initially be flagged.
   void MenuItem(const char* parent, const char* name,
                 int cmdEvent, bool flagged);
 
@@ -420,4 +411,4 @@ class ScrollView {
 };
 
 #endif  // OCR_SCROLLVIEW_H__
-#endif  // TESSERACT_VIEWER_SCROLLVIEW_H__
+#endif  // TESSERACT_VIEWER_SCROLLVIEW_H_

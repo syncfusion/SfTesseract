@@ -1,5 +1,5 @@
 /////////////////////////////////////////////////////////////////////
-// File:        ocrpara.h
+// File:        ocrpara.cpp
 // Description: OCR Paragraph Output Type
 // Author:      David Eger
 // Created:     2010-11-15
@@ -17,7 +17,7 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#include <stdio.h>
+#include <cstdio>
 
 #include "ocrpara.h"
 #include "host.h"  // For NearlyEqual()

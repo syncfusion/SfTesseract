@@ -1,10 +1,9 @@
 /******************************************************************************
- **	Filename:    featdefs.h
- **	Purpose:     Definitions of currently defined feature types.
- **	Author:      Dan Johnson
- **	History:     Mon May 21 08:28:01 1990, DSJ, Created.
+ ** Filename:    featdefs.h
+ ** Purpose:     Definitions of currently defined feature types.
+ ** Author:      Dan Johnson
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,8 +14,9 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-#ifndef   FEATDEFS_H
-#define   FEATDEFS_H
+
+#ifndef FEATDEFS_H
+#define FEATDEFS_H
 
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
@@ -25,13 +25,10 @@
 
 /* Enumerate the different types of features currently defined. */
 #define NUM_FEATURE_TYPES 4
-extern const char* kMicroFeatureType;
-extern const char* kCNFeatureType;
-extern const char* kIntFeatureType;
-extern const char* kGeoFeatureType;
-
-/* define error traps which can be triggered by this module.*/
-#define ILLEGAL_SHORT_NAME  2000
+extern TESS_API const char* const kMicroFeatureType;
+extern TESS_API const char* const kCNFeatureType;
+extern TESS_API const char* const kIntFeatureType;
+extern TESS_API const char* const kGeoFeatureType;
 
 /* A character is described by multiple sets of extracted features.  Each
   set contains a number of features of a particular type, for example, a
@@ -40,18 +37,16 @@ extern const char* kGeoFeatureType;
   feature set contain the same number of parameters.*/
 
 struct CHAR_DESC_STRUCT {
-  uinT32 NumFeatureSets;
+  uint32_t NumFeatureSets;
   FEATURE_SET FeatureSets[NUM_FEATURE_TYPES];
 };
-typedef CHAR_DESC_STRUCT *CHAR_DESC;
+using CHAR_DESC = CHAR_DESC_STRUCT *;
 
 struct FEATURE_DEFS_STRUCT {
-  uinT32 NumFeatureTypes;
+  int32_t NumFeatureTypes;
   const FEATURE_DESC_STRUCT* FeatureDesc[NUM_FEATURE_TYPES];
-  const FEATURE_EXT_STRUCT* FeatureExtractors[NUM_FEATURE_TYPES];
-  int FeatureEnabled[NUM_FEATURE_TYPES];
 };
-typedef FEATURE_DEFS_STRUCT *FEATURE_DEFS;
+using FEATURE_DEFS = FEATURE_DEFS_STRUCT *;
 
 /*----------------------------------------------------------------------
     Generic functions for manipulating character descriptions
@@ -65,20 +60,20 @@ CHAR_DESC NewCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs);
 bool ValidCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
                           CHAR_DESC CharDesc);
 
-void WriteCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                          FILE *File, CHAR_DESC CharDesc);
+void WriteCharDescription(const FEATURE_DEFS_STRUCT& FeatureDefs,
+                          CHAR_DESC CharDesc, STRING* str);
 
 CHAR_DESC ReadCharDescription(const FEATURE_DEFS_STRUCT &FeatureDefs,
                               FILE *File);
 
-int ShortNameToFeatureType(const FEATURE_DEFS_STRUCT &FeatureDefs,
-                           const char *ShortName);
+uint32_t ShortNameToFeatureType(const FEATURE_DEFS_STRUCT &FeatureDefs,
+                                const char *ShortName);
 
 /**----------------------------------------------------------------------------
         Global Data Definitions and Declarations
 ----------------------------------------------------------------------------**/
 extern const FEATURE_DESC_STRUCT MicroFeatureDesc;
-extern const FEATURE_DESC_STRUCT PicoFeatDesc;
+extern TESS_API const FEATURE_DESC_STRUCT PicoFeatDesc;
 extern const FEATURE_DESC_STRUCT CharNormDesc;
 extern const FEATURE_DESC_STRUCT OutlineFeatDesc;
 extern const FEATURE_DESC_STRUCT IntFeatDesc;

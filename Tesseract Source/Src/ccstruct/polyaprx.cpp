@@ -2,7 +2,6 @@
  * File:        polyaprx.cpp  (Formerly polygon.c)
  * Description: Code for polygonal approximation from old edgeprog.
  * Author:      Ray Smith
- * Created:     Thu Nov 25 11:42:04 GMT 1993
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,22 +16,22 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          <stdio.h>
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
+#include "polyaprx.h"
+#include <cstdint>             // for INT16_MAX, int8_t
+#include "blobs.h"             // for EDGEPT, TPOINT, VECTOR, TESSLINE
+#include "coutln.h"            // for C_OUTLINE
+#include "errcode.h"           // for ASSERT_HOST
+#include "mod128.h"            // for DIR128
+#include "params.h"            // for BoolParam, BOOL_VAR
+#include "points.h"            // for ICOORD
+#include "rect.h"              // for TBOX
+#include "tprintf.h"           // for tprintf
+
 #define FASTEDGELENGTH    256
-#include          "polyaprx.h"
-#include          "params.h"
-#include          "tprintf.h"
 
-#define EXTERN
-
-EXTERN BOOL_VAR (poly_debug, FALSE, "Debug old poly");
-EXTERN BOOL_VAR (poly_wide_objects_better, TRUE,
-"More accurate approx on wide things");
-
+static BOOL_VAR(poly_debug, false, "Debug old poly");
+static BOOL_VAR(poly_wide_objects_better, true,
+                "More accurate approx on wide things");
 
 #define FIXED       4            /*OUTLINE point is fixed */
 
@@ -53,13 +52,15 @@ const int par2 = 6750 / (approx_dist * approx_dist);
  * tesspoly_outline
  *
  * Approximate an outline from chain codes form using the old tess algorithm.
+ * If allow_detailed_fx is true, the EDGEPTs in the returned TBLOB
+ * contain pointers to the input C_OUTLINEs that enable higher-resolution
+ * feature extraction that does not use the polygonal approximation.
  **********************************************************************/
 
 
-TESSLINE* ApproximateOutline(C_OUTLINE* c_outline) {
-  EDGEPT *edgept;                // converted steps
+TESSLINE* ApproximateOutline(bool allow_detailed_fx, C_OUTLINE* c_outline) {
   TBOX loop_box;                  // bounding box
-  inT32 area;                    // loop area
+  int32_t area;                    // loop area
   EDGEPT stack_edgepts[FASTEDGELENGTH];  // converted path
   EDGEPT* edgepts = stack_edgepts;
 
@@ -72,21 +73,26 @@ TESSLINE* ApproximateOutline(C_OUTLINE* c_outline) {
   if (!poly_wide_objects_better && loop_box.width() > area)
     area = loop_box.width();
   area *= area;
-  edgept = edgesteps_to_edgepts(c_outline, edgepts);
+  edgesteps_to_edgepts(c_outline, edgepts);
   fix2(edgepts, area);
-  edgept = poly2 (edgepts, area);  // 2nd approximation.
+  EDGEPT* edgept = poly2(edgepts, area);  // 2nd approximation.
   EDGEPT* startpt = edgept;
-  EDGEPT* result = NULL;
-  EDGEPT* prev_result = NULL;
+  EDGEPT* result = nullptr;
+  EDGEPT* prev_result = nullptr;
   do {
-    EDGEPT* new_pt = new EDGEPT;
+    auto* new_pt = new EDGEPT;
     new_pt->pos = edgept->pos;
     new_pt->prev = prev_result;
-    if (prev_result == NULL) {
+    if (prev_result == nullptr) {
       result = new_pt;
     } else {
       prev_result->next = new_pt;
       new_pt->prev = prev_result;
+    }
+    if (allow_detailed_fx) {
+      new_pt->src_outline = edgept->src_outline;
+      new_pt->start_step = edgept->start_step;
+      new_pt->step_count = edgept->step_count;
     }
     prev_result = new_pt;
     edgept = edgept->next;
@@ -111,15 +117,15 @@ edgesteps_to_edgepts (           //convert outline
 C_OUTLINE * c_outline,           //input
 EDGEPT edgepts[]                 //output is array
 ) {
-  inT32 length;                  //steps in path
+  int32_t length;                  //steps in path
   ICOORD pos;                    //current coords
-  inT32 stepindex;               //current step
-  inT32 stepinc;                 //increment
-  inT32 epindex;                 //current EDGEPT
-  inT32 count;                   //repeated steps
+  int32_t stepindex;               //current step
+  int32_t stepinc;                 //increment
+  int32_t epindex;                 //current EDGEPT
+  int32_t count;                   //repeated steps
   ICOORD vec;                    //for this 8 step
   ICOORD prev_vec;
-  inT8 epdir;                    //of this step
+  int8_t epdir;                    //of this step
   DIR128 prevdir;                //prvious dir
   DIR128 dir;                    //of this step
 
@@ -129,6 +135,7 @@ EDGEPT edgepts[]                 //output is array
   epindex = 0;
   prevdir = -1;
   count = 0;
+  int prev_stepindex = 0;
   do {
     dir = c_outline->step_dir (stepindex);
     vec = c_outline->step (stepindex);
@@ -156,14 +163,18 @@ EDGEPT edgepts[]                 //output is array
       edgepts[epindex].flags[FLAGS] = 0;
       edgepts[epindex].next = &edgepts[epindex + 1];
       prevdir += 64;
-      epdir = (DIR128) 0 - prevdir;
+      epdir = DIR128(0) - prevdir;
       epdir >>= 4;
       epdir &= 7;
       edgepts[epindex].flags[DIR] = epdir;
+      edgepts[epindex].src_outline = c_outline;
+      edgepts[epindex].start_step = prev_stepindex;
+      edgepts[epindex].step_count = stepindex - prev_stepindex;
       epindex++;
       prevdir = dir;
       prev_vec = vec;
       count = 1;
+      prev_stepindex = stepindex;
     }
     else
       count++;
@@ -178,10 +189,13 @@ EDGEPT edgepts[]                 //output is array
   pos += prev_vec;
   edgepts[epindex].flags[RUNLENGTH] = count;
   edgepts[epindex].flags[FLAGS] = 0;
+  edgepts[epindex].src_outline = c_outline;
+  edgepts[epindex].start_step = prev_stepindex;
+  edgepts[epindex].step_count = stepindex - prev_stepindex;
   edgepts[epindex].prev = &edgepts[epindex - 1];
   edgepts[epindex].next = &edgepts[0];
   prevdir += 64;
-  epdir = (DIR128) 0 - prevdir;
+  epdir = DIR128(0) - prevdir;
   epdir >>= 4;
   epdir &= 7;
   edgepts[epindex].flags[DIR] = epdir;
@@ -201,18 +215,18 @@ EDGEPT edgepts[]                 //output is array
 void fix2(                //polygonal approx
           EDGEPT *start,  /*loop to approimate */
           int area) {
-  register EDGEPT *edgept;       /*current point */
-  register EDGEPT *edgept1;
-  register EDGEPT *loopstart;    /*modified start of loop */
-  register EDGEPT *linestart;    /*start of line segment */
-  register int dir1, dir2;       /*directions of line */
-  register int sum1, sum2;       /*lengths in dir1,dir2 */
+  EDGEPT *edgept; /*current point */
+  EDGEPT *edgept1;
+  EDGEPT *loopstart;             /*modified start of loop */
+  EDGEPT *linestart;             /*start of line segment */
+  int dir1, dir2;                /*directions of line */
+  int sum1, sum2;                /*lengths in dir1,dir2 */
   int stopped;                   /*completed flag */
   int fixed_count;               //no of fixed points
   int d01, d12, d23, gapmin;
   TPOINT d01vec, d12vec, d23vec;
-  register EDGEPT *edgefix, *startfix;
-  register EDGEPT *edgefix0, *edgefix1, *edgefix2, *edgefix3;
+  EDGEPT *edgefix, *startfix;
+  EDGEPT *edgefix0, *edgefix1, *edgefix2, *edgefix3;
 
   edgept = start;                /*start of loop */
   while (((edgept->flags[DIR] - edgept->prev->flags[DIR] + 1) & 7) < 3
@@ -336,18 +350,18 @@ void fix2(                //polygonal approx
   do {
     if (fixed_count <= 3)
       break;                     //already too few
-    point_diff (d12vec, edgefix1->pos, edgefix2->pos);
-    d12 = LENGTH (d12vec);
+    d12vec.diff(edgefix1->pos, edgefix2->pos);
+    d12 = d12vec.length();
     // TODO(rays) investigate this change:
     // Only unfix a point if it is part of a low-curvature section
     // of outline and the total angle change of the outlines is
     // less than 90 degrees, ie the scalar product is positive.
-    // if (d12 <= gapmin && SCALAR(edgefix0->vec, edgefix2->vec) > 0) {
+    // if (d12 <= gapmin && edgefix0->vec.dot(edgefix2->vec) > 0) {
     if (d12 <= gapmin) {
-      point_diff (d01vec, edgefix0->pos, edgefix1->pos);
-      d01 = LENGTH (d01vec);
-      point_diff (d23vec, edgefix2->pos, edgefix3->pos);
-      d23 = LENGTH (d23vec);
+      d01vec.diff(edgefix0->pos, edgefix1->pos);
+      d01 = d01vec.length();
+      d23vec.diff(edgefix2->pos, edgefix3->pos);
+      d23 = d23vec.length();
       if (d01 > d23) {
         edgefix2->flags[FLAGS] &= ~FIXED;
         fixed_count--;
@@ -387,15 +401,15 @@ EDGEPT *poly2(                  //second poly
               EDGEPT *startpt,  /*start of loop */
               int area          /*area of blob box */
              ) {
-  register EDGEPT *edgept;       /*current outline point */
+  EDGEPT *edgept;                /*current outline point */
   EDGEPT *loopstart;             /*starting point */
-  register EDGEPT *linestart;    /*start of line */
-  register int edgesum;          /*correction count */
+  EDGEPT *linestart;             /*start of line */
+  int edgesum;                   /*correction count */
 
   if (area < 1200)
     area = 1200;                 /*minimum value */
 
-  loopstart = NULL;              /*not found it yet */
+  loopstart = nullptr;              /*not found it yet */
   edgept = startpt;              /*start of loop */
 
   do {
@@ -410,7 +424,7 @@ EDGEPT *poly2(                  //second poly
   }
   while (edgept != startpt);     /*until found or finished */
 
-  if (loopstart == NULL && (startpt->flags[FLAGS] & FIXED) == 0) {
+  if (loopstart == nullptr && (startpt->flags[FLAGS] & FIXED) == 0) {
                                  /*fixed start of loop */
     startpt->flags[FLAGS] |= FIXED;
     loopstart = startpt;         /*or start of loop */
@@ -486,13 +500,13 @@ void cutline(                //recursive refine
              EDGEPT *last,
              int area        /*area of object */
             ) {
-  register EDGEPT *edge;         /*current edge */
+  EDGEPT *edge;                  /*current edge */
   TPOINT vecsum;                 /*vector sum */
   int vlen;                      /*approx length of vecsum */
   TPOINT vec;                    /*accumulated vector */
   EDGEPT *maxpoint;              /*worst point */
   int maxperp;                   /*max deviation */
-  register int perp;             /*perp distance */
+  int perp;                      /*perp distance */
   int ptcount;                   /*no of points */
   int squaresum;                 /*sum of perps */
 
@@ -522,7 +536,7 @@ void cutline(                //recursive refine
   edge = edge->next;             /*move to actual point */
   maxpoint = edge;               /*in case there isn't one */
   do {
-    perp = CROSS (vec, vecsum);  /*get perp distance */
+    perp = vec.cross(vecsum);    // get perp distance
     if (perp != 0) {
       perp *= perp;              /*squared deviation */
     }
@@ -540,10 +554,10 @@ void cutline(                //recursive refine
   }
   while (edge != last);          /*test all line */
 
-  perp = LENGTH (vecsum);
+  perp = vecsum.length();
   ASSERT_HOST (perp != 0);
 
-  if (maxperp < 256 * MAX_INT16) {
+  if (maxperp < 256 * INT16_MAX) {
     maxperp <<= 8;
     maxperp /= perp;             /*true max perp */
   }
@@ -551,7 +565,7 @@ void cutline(                //recursive refine
     maxperp /= perp;
     maxperp <<= 8;               /*avoid overflow */
   }
-  if (squaresum < 256 * MAX_INT16)
+  if (squaresum < 256 * INT16_MAX)
                                  /*mean squared perp */
     perp = (squaresum << 8) / (perp * ptcount);
   else

@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        drawfx.cpp  (Formerly drawfx.c)
  * Description: Draw things to do with feature extraction.
- * Author:		Ray Smith
- * Created:		Mon Jan 27 11:02:16 GMT 1992
+ * Author:      Ray Smith
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,15 +16,13 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          "drawfx.h"
-#include          "normalis.h"
-#include          "werd.h"
-
-// Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
+
+#include          "drawfx.h"
+#include          "normalis.h"
+#include          "werd.h"
 
 #ifndef GRAPHICS_DISABLED
 #define FXDEMOWIN     "FXDemo"
@@ -35,23 +32,13 @@
 #define FXDEMOYSIZE     256
 #define BLN_MAX       512        //max coord for bln
 #define WERDWIDTH       (BLN_MAX*20)
-#define DECENT_WERD_WIDTH (5*kBlnXHeight)
                                  //title of window
 #define DEBUG_WIN_NAME    "FXDebug"
-#define DEBUG_XPOS      0
-#define DEBUG_YPOS      120
-#define DEBUG_XSIZE     80
-#define DEBUG_YSIZE     32
-#define YMAX        3508
-#define XMAX        2550
-#define MAXEDGELENGTH   1024     //max steps inoutline
 
-#define EXTERN
+STRING_VAR(fx_debugfile, DEBUG_WIN_NAME, "Name of debugfile");
 
-EXTERN STRING_VAR (fx_debugfile, DEBUG_WIN_NAME, "Name of debugfile");
-
-EXTERN ScrollView* fx_win = NULL;
-EXTERN FILE *fx_debug = NULL;
+ScrollView* fx_win = nullptr;
+FILE* fx_debug = nullptr;
 
 /**********************************************************************
  * create_fx_win

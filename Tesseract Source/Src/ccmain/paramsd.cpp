@@ -2,7 +2,6 @@
 // File:        paramsd.cpp
 // Description: Tesseract parameter Editor
 // Author:      Joern Wanke
-// Created:     Wed Jul 18 10:05:01 PDT 2007
 //
 // (C) Copyright 2007, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +18,6 @@
 //
 // The parameters editor is used to edit all the parameters used within
 // tesseract from the ui.
-#ifdef _WIN32
-#else
-#include <stdlib.h>
-#include <stdio.h>
-#endif
-
-#include <map>
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
@@ -33,13 +25,21 @@
 #endif
 
 #ifndef GRAPHICS_DISABLED
+
 #include "paramsd.h"
-
-
-#include "params.h"
-#include "scrollview.h"
-#include "svmnode.h"
-
+#include <cstdio>            // for fclose, fopen, fprintf, sprintf, FILE
+#include <cstdlib>           // for atoi
+#include <cstring>           // for strcmp, strcspn, strlen, strncpy
+#include <locale>            // for std::locale::classic
+#include <map>               // for map, _Rb_tree_iterator, map<>::iterator
+#include <memory>            // for unique_ptr
+#include <sstream>           // for std::stringstream
+#include <utility>           // for pair
+#include "genericvector.h"   // for GenericVector
+#include "params.h"          // for ParamsVectors, StringParam, BoolParam
+#include "scrollview.h"      // for SVEvent, ScrollView, SVET_POPUP
+#include "svmnode.h"         // for SVMenuNode
+#include "tesseractclass.h"  // for Tesseract
 
 #define VARDIR        "configs/" /*parameters files */
 #define MAX_ITEMS_IN_SUBMENU 30
@@ -128,39 +128,44 @@ const char* ParamContent::GetDescription() const {
   else if (param_type_ == VT_BOOLEAN) { return bIt->info_str(); }
   else if (param_type_ == VT_DOUBLE) { return dIt->info_str(); }
   else if (param_type_ == VT_STRING) { return sIt->info_str(); }
-  else return NULL;
+  else return nullptr;
 }
 
 // Getter for the value.
-const char* ParamContent::GetValue() const {
-char* msg = new char[1024];
+STRING ParamContent::GetValue() const {
+  STRING result;
   if (param_type_ == VT_INTEGER) {
-    sprintf(msg, "%d", ((inT32) *(iIt)));
+    result.add_str_int("", *iIt);
   } else if (param_type_ == VT_BOOLEAN) {
-    sprintf(msg, "%d", ((BOOL8) * (bIt)));
+    result.add_str_int("", *bIt);
   } else if (param_type_ == VT_DOUBLE) {
-    sprintf(msg, "%g", ((double) * (dIt)));
+    result.add_str_double("", *dIt);
   } else if (param_type_ == VT_STRING) {
-    if (((STRING) * (sIt)).string() != NULL) {
-      sprintf(msg, "%s", ((STRING) * (sIt)).string());
+    if (STRING(*(sIt)).string() != nullptr) {
+      result = sIt->string();
     } else {
-      sprintf(msg, "Null");
+      result = "Null";
     }
   }
-  return msg;
+  return result;
 }
 
 // Setter for the value.
 void ParamContent::SetValue(const char* val) {
 // TODO (wanke) Test if the values actually are properly converted.
 // (Quickly visible impacts?)
-  changed_ = TRUE;
+  changed_ = true;
   if (param_type_ == VT_INTEGER) {
     iIt->set_value(atoi(val));
   } else if (param_type_ == VT_BOOLEAN) {
     bIt->set_value(atoi(val));
   } else if (param_type_ == VT_DOUBLE) {
-    dIt->set_value(strtod(val, NULL));
+    std::stringstream stream(val);
+    // Use "C" locale for reading double value.
+    stream.imbue(std::locale::classic());
+    double d = 0;
+    stream >> d;
+    dIt->set_value(d);
   } else if (param_type_ == VT_STRING) {
     sIt->set_value(val);
   }
@@ -171,22 +176,19 @@ void ParamContent::SetValue(const char* val) {
 void ParamsEditor::GetPrefixes(const char* s, STRING* level_one,
                                STRING* level_two,
                                STRING* level_three) {
-  char* p = new char[1024];
-  GetFirstWords(s, 1, p);
-  *level_one = p;
-  GetFirstWords(s, 2, p);
-  *level_two = p;
-  GetFirstWords(s, 3, p);
-  *level_three = p;
-  delete[] p;
+  std::unique_ptr<char[]> p(new char[1024]);
+  GetFirstWords(s, 1, p.get());
+  *level_one = p.get();
+  GetFirstWords(s, 2, p.get());
+  *level_two = p.get();
+  GetFirstWords(s, 3, p.get());
+  *level_three = p.get();
 }
 
 // Compare two VC objects by their name.
 int ParamContent::Compare(const void* v1, const void* v2) {
-  const ParamContent* one =
-    *reinterpret_cast<const ParamContent* const *>(v1);
-  const ParamContent* two =
-    *reinterpret_cast<const ParamContent* const *>(v2);
+  const ParamContent* one = *static_cast<const ParamContent* const*>(v1);
+  const ParamContent* two = *static_cast<const ParamContent* const*>(v2);
   return strcmp(one->GetName(), two->GetName());
 }
 
@@ -194,7 +196,7 @@ int ParamContent::Compare(const void* v1, const void* v2) {
 // SVMenuNode tree from it.
 // TODO (wanke): This is actually sort of hackish.
 SVMenuNode* ParamsEditor::BuildListOfAllLeaves(tesseract::Tesseract *tess) {
-  SVMenuNode* mr = new SVMenuNode();
+  auto* mr = new SVMenuNode();
   ParamContent_LIST vclist;
   ParamContent_IT vc_it(&vclist);
   // Amount counts the number of entries for a specific char*.
@@ -203,7 +205,7 @@ SVMenuNode* ParamsEditor::BuildListOfAllLeaves(tesseract::Tesseract *tess) {
 
   // Add all parameters to a list.
   int v, i;
-  int num_iterations = (tess->params() == NULL) ? 1 : 2;
+  int num_iterations = (tess->params() == nullptr) ? 1 : 2;
   for (v = 0; v < num_iterations; ++v) {
     tesseract::ParamsVectors *vec = (v == 0) ? GlobalParams() : tess->params();
     for (i = 0; i < vec->int_params.size(); ++i) {
@@ -246,19 +248,19 @@ SVMenuNode* ParamsEditor::BuildListOfAllLeaves(tesseract::Tesseract *tess) {
     STRING tag3;
     GetPrefixes(vc->GetName(), &tag, &tag2, &tag3);
 
-    if (amount[tag.string()] == 1) { other->AddChild(vc->GetName(), vc->GetId(),
-                                            vc->GetValue(),
-                                            vc->GetDescription());
+    if (amount[tag.string()] == 1) {
+      other->AddChild(vc->GetName(), vc->GetId(), vc->GetValue().string(),
+                      vc->GetDescription());
     } else {  // More than one would use this submenu -> create submenu.
       SVMenuNode* sv = mr->AddChild(tag.string());
       if ((amount[tag.string()] <= MAX_ITEMS_IN_SUBMENU) ||
           (amount[tag2.string()] <= 1)) {
         sv->AddChild(vc->GetName(), vc->GetId(),
-                     vc->GetValue(), vc->GetDescription());
+                     vc->GetValue().string(), vc->GetDescription());
       } else {  // Make subsubmenus.
         SVMenuNode* sv2 = sv->AddChild(tag2.string());
         sv2->AddChild(vc->GetName(), vc->GetId(),
-                      vc->GetValue(), vc->GetDescription());
+                      vc->GetValue().string(), vc->GetDescription());
       }
     }
   }
@@ -278,7 +280,7 @@ void ParamsEditor::Notify(const SVEvent* sve) {
           sve->command_id);
       vc->SetValue(param);
       sv_window_->AddMessage("Setting %s to %s",
-                             vc->GetName(), vc->GetValue());
+                             vc->GetName(), vc->GetValue().string());
     }
   }
 }
@@ -288,7 +290,7 @@ void ParamsEditor::Notify(const SVEvent* sve) {
 // empty window and attach the parameters editor to that window (ugly).
 ParamsEditor::ParamsEditor(tesseract::Tesseract* tess,
                                  ScrollView* sv) {
-  if (sv == NULL) {
+  if (sv == nullptr) {
     const char* name = "ParamEditorMAIN";
     sv = new ScrollView(name, 1, 1, 200, 200, 300, 200);
   }
@@ -325,29 +327,32 @@ void ParamsEditor::WriteParams(char *filename,
   FILE *fp;                      // input file
   char msg_str[255];
                                  // if file exists
-  if ((fp = fopen (filename, "rb")) != NULL) {
+  if ((fp = fopen (filename, "rb")) != nullptr) {
     fclose(fp);
     sprintf (msg_str, "Overwrite file " "%s" "? (Y/N)", filename);
     int a = sv_window_->ShowYesNoDialog(msg_str);
-    if (a == 'n') { return; }  // dont write
+    if (a == 'n') {
+      return;
+    }  // don't write
   }
 
 
   fp = fopen (filename, "wb");  // can we write to it?
-  if (fp == NULL) {
-    sv_window_->AddMessage("Cant write to file " "%s" "", filename);
+  if (fp == nullptr) {
+    sv_window_->AddMessage(
+        "Can't write to file "
+        "%s"
+        "",
+        filename);
     return;
   }
-
-  for (std::map<int, ParamContent*>::iterator iter = vcMap.begin();
-                                          iter != vcMap.end();
-                                          ++iter) {
-    ParamContent* cur = iter->second;
+  for (auto& iter : vcMap) {
+    ParamContent* cur = iter.second;
     if (!changes_only || cur->HasChanged()) {
-      fprintf (fp, "%-25s   %-12s   # %s\n",
-               cur->GetName(), cur->GetValue(), cur->GetDescription());
+      fprintf(fp, "%-25s   %-12s   # %s\n",
+              cur->GetName(), cur->GetValue().string(), cur->GetDescription());
     }
   }
   fclose(fp);
 }
-#endif
+#endif // GRAPHICS_DISABLED

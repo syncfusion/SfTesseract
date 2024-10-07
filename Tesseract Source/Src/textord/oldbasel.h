@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        oldbasel.h  (Formerly oldbl.h)
  * Description: A re-implementation of the old baseline algorithm.
- * Author:		Ray Smith
- * Created:		Wed Oct  6 09:41:48 BST 1993
+ * Author:      Ray Smith
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,33 +21,17 @@
 
 #include          "params.h"
 #include          "blobbox.h"
-#include          "notdll.h"
 
-extern BOOL_VAR_H (textord_really_old_xheight, FALSE,
-"Use original wiseowl xheight");
-extern BOOL_VAR_H (textord_oldbl_debug, FALSE,
+extern BOOL_VAR_H (textord_oldbl_debug, false,
 "Debug old baseline generation");
-extern BOOL_VAR_H (textord_debug_baselines, FALSE,
-"Debug baseline generation");
-extern BOOL_VAR_H (textord_oldbl_paradef, TRUE, "Use para default mechanism");
-extern BOOL_VAR_H (textord_oldbl_split_splines, TRUE,
-"Split stepped splines");
-extern BOOL_VAR_H (textord_oldbl_merge_parts, TRUE,
-"Merge suspect partitions");
-extern BOOL_VAR_H (oldbl_xhfix, FALSE,
-"Fix bug in modes threshold for xheights");
-extern INT_VAR_H (oldbl_holed_losscount, 10,
-"Max lost before fallback line used");
-extern double_VAR_H (oldbl_dot_error_size, 1.26, "Max aspect ratio of a dot");
-extern double_VAR_H (textord_oldbl_jumplimit, 0.15,
-"X fraction for new partition");
+
 int get_blob_coords(                    //get boxes
-                    TO_ROW *row,        //row to use
-                    inT32 lineheight,   //block level
-                    TBOX *blobcoords,    //ouput boxes
-                    BOOL8 &holed_line,  //lost a lot of blobs
-                    int &outcount       //no of real blobs
-                   );
+        TO_ROW* row,        //row to use
+        int32_t lineheight,   //block level
+        TBOX* blobcoords,    //output boxes
+        bool& holed_line,  //lost a lot of blobs
+        int& outcount       //no of real blobs
+);
 void make_first_baseline (       //initial approximation
 TBOX blobcoords[],                /*blob bounding boxes */
 int blobcount,                   /*no of blobcoords */
@@ -90,7 +73,7 @@ QSPLINE * spline,                /*approximating spline */
 float ydiffs[]                   /*output */
 );
 int choose_partition (           //select partition
-register float diff,             /*diff from spline */
+float diff,             /*diff from spline */
 float partdiffs[],               /*diff on all parts */
 int lastpart,                    /*last assigned partition */
 float jumplimit,                 /*new part threshold */
@@ -114,12 +97,12 @@ int ycoords[],                   /*points to work on */
 int degree, int pointcount,      /*no of points */
 int xstarts[]                    //result
 );
-BOOL8 split_stepped_spline (     //make xstarts
-QSPLINE * baseline,              //current shot
-float jumplimit,                 //max step fuction
-int xcoords[],                   /*points to work on */
-int xstarts[],                   //result
-int &segments                    //no of segments
+bool split_stepped_spline(     //make xstarts
+        QSPLINE* baseline,              //current shot
+        float jumplimit,                 //max step function
+        int* xcoords,                   /*points to work on */
+        int* xstarts,                   //result
+        int& segments                    //no of segments
 );
 void insert_spline_point (       //get descenders
 int xstarts[],                   //starts to shuffle

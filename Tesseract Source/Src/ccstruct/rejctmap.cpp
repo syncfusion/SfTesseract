@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        rejctmap.cpp  (Formerly rejmap.c)
  * Description: REJ and REJMAP class functions.
- * Author:		Phil Cheatle
- * Created:		Thu Jun  9 13:46:38 BST 1994
+ * Author:      Phil Cheatle
  *
  * (C) Copyright 1994, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +16,10 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          "hosthplb.h"
-//#include                                      "basefile.h"
-#include          "rejctmap.h"
-#include          "secname.h"
-#include          "params.h"
+#include "rejctmap.h"
+#include "params.h"
 
-BOOL8 REJ::perm_rejected() {  //Is char perm reject?
+bool REJ::perm_rejected() {  //Is char perm reject?
   return (flag (R_TESS_FAILURE) ||
     flag (R_SMALL_XHT) ||
     flag (R_EDGE_CHAR) ||
@@ -35,47 +30,47 @@ BOOL8 REJ::perm_rejected() {  //Is char perm reject?
 }
 
 
-BOOL8 REJ::rej_before_nn_accept() {
+bool REJ::rej_before_nn_accept() {
   return flag (R_POOR_MATCH) ||
     flag (R_NOT_TESS_ACCEPTED) ||
     flag (R_CONTAINS_BLANKS) || flag (R_BAD_PERMUTER);
 }
 
 
-BOOL8 REJ::rej_between_nn_and_mm() {
+bool REJ::rej_between_nn_and_mm() {
   return flag (R_HYPHEN) ||
     flag (R_DUBIOUS) ||
     flag (R_NO_ALPHANUMS) || flag (R_MOSTLY_REJ) || flag (R_XHT_FIXUP);
 }
 
 
-BOOL8 REJ::rej_between_mm_and_quality_accept() {
+bool REJ::rej_between_mm_and_quality_accept() {
   return flag (R_BAD_QUALITY);
 }
 
 
-BOOL8 REJ::rej_between_quality_and_minimal_rej_accept() {
+bool REJ::rej_between_quality_and_minimal_rej_accept() {
   return flag (R_DOC_REJ) ||
     flag (R_BLOCK_REJ) || flag (R_ROW_REJ) || flag (R_UNLV_REJ);
 }
 
 
-BOOL8 REJ::rej_before_mm_accept() {
+bool REJ::rej_before_mm_accept() {
   return rej_between_nn_and_mm () ||
     (rej_before_nn_accept () &&
     !flag (R_NN_ACCEPT) && !flag (R_HYPHEN_ACCEPT));
 }
 
 
-BOOL8 REJ::rej_before_quality_accept() {
+bool REJ::rej_before_quality_accept() {
   return rej_between_mm_and_quality_accept () ||
     (!flag (R_MM_ACCEPT) && rej_before_mm_accept ());
 }
 
 
-BOOL8 REJ::rejected() {  //Is char rejected?
+bool REJ::rejected() {  //Is char rejected?
   if (flag (R_MINIMAL_REJ_ACCEPT))
-    return FALSE;
+    return false;
   else
     return (perm_rejected () ||
       rej_between_quality_and_minimal_rej_accept () ||
@@ -83,7 +78,7 @@ BOOL8 REJ::rejected() {  //Is char rejected?
 }
 
 
-BOOL8 REJ::accept_if_good_quality() {  //potential rej?
+bool REJ::accept_if_good_quality() {  //potential rej?
   return (rejected () &&
     !perm_rejected () &&
     flag (R_BAD_PERMUTER) &&
@@ -235,8 +230,6 @@ void REJ::setrej_minimal_rej_accept() {
 
 
 void REJ::full_print(FILE *fp) {
-  #ifndef SECURE_NAMES
-
   fprintf (fp, "R_TESS_FAILURE: %s\n", flag (R_TESS_FAILURE) ? "T" : "F");
   fprintf (fp, "R_SMALL_XHT: %s\n", flag (R_SMALL_XHT) ? "T" : "F");
   fprintf (fp, "R_EDGE_CHAR: %s\n", flag (R_EDGE_CHAR) ? "T" : "F");
@@ -267,76 +260,25 @@ void REJ::full_print(FILE *fp) {
   fprintf (fp, "R_QUALITY_ACCEPT: %s\n", flag (R_QUALITY_ACCEPT) ? "T" : "F");
   fprintf (fp, "R_MINIMAL_REJ_ACCEPT: %s\n",
     flag (R_MINIMAL_REJ_ACCEPT) ? "T" : "F");
-  #endif
 }
 
-
-//The REJMAP class has been hacked to use alloc_struct instead of new [].
-//This is to reduce memory fragmentation only as it is rather kludgy.
-//alloc_struct by-passes the call to the contsructor of REJ on each
-//array element. Although the constructor is empty, the BITS16 members
-//do have a constructor which sets all the flags to 0. The memset
-//replaces this functionality.
-
-REJMAP::REJMAP(  //classwise copy
-               const REJMAP &source) {
-  REJ *to;
-  REJ *from = source.ptr;
-  int i;
-
-  len = source.length ();
-
-  if (len > 0) {
-    ptr = (REJ *) alloc_struct (len * sizeof (REJ), "REJ");
-    to = ptr;
-    for (i = 0; i < len; i++) {
-      *to = *from;
-      to++;
-      from++;
-    }
-  }
-  else
-    ptr = NULL;
-}
-
-
-REJMAP & REJMAP::operator= (     //assign REJMAP
-const REJMAP & source            //from this
-) {
-  REJ *
-    to;
-  REJ *
-    from = source.ptr;
-  int
-    i;
-
-  initialise (source.len);
-  to = ptr;
-  for (i = 0; i < len; i++) {
-    *to = *from;
-    to++;
-    from++;
+REJMAP &REJMAP::operator=(const REJMAP &source) {
+  initialise(source.len);
+  for (int i = 0; i < len; i++) {
+    ptr[i] = source.ptr[i];
   }
   return *this;
 }
 
-
-void REJMAP::initialise(  //Redefine map
-                        inT16 length) {
-  if (ptr != NULL)
-    free_struct (ptr, len * sizeof (REJ), "REJ");
+void REJMAP::initialise(int16_t length) {
+  ptr.reset(new REJ[length]);
   len = length;
-  if (len > 0)
-    ptr = (REJ *) memset (alloc_struct (len * sizeof (REJ), "REJ"),
-      0, len * sizeof (REJ));
-  else
-    ptr = NULL;
 }
 
 
-inT16 REJMAP::accept_count() {  //How many accepted?
+int16_t REJMAP::accept_count() {  //How many accepted?
   int i;
-  inT16 count = 0;
+  int16_t count = 0;
 
   for (i = 0; i < len; i++) {
     if (ptr[i].accepted ())
@@ -346,54 +288,33 @@ inT16 REJMAP::accept_count() {  //How many accepted?
 }
 
 
-BOOL8 REJMAP::recoverable_rejects() {  //Any non perm rejs?
-  int i;
-
-  for (i = 0; i < len; i++) {
+bool REJMAP::recoverable_rejects() {  //Any non perm rejs?
+  for (int i = 0; i < len; i++) {
     if (ptr[i].recoverable ())
-      return TRUE;
+      return true;
   }
-  return FALSE;
+  return false;
 }
 
 
-BOOL8 REJMAP::quality_recoverable_rejects() {  //Any potential rejs?
-  int i;
-
-  for (i = 0; i < len; i++) {
+bool REJMAP::quality_recoverable_rejects() {  //Any potential rejs?
+  for (int i = 0; i < len; i++) {
     if (ptr[i].accept_if_good_quality ())
-      return TRUE;
+      return true;
   }
-  return FALSE;
+  return false;
 }
 
 
 void REJMAP::remove_pos(           //Cut out an element
-                        inT16 pos  //element to remove
+                        int16_t pos  //element to remove
                        ) {
-  REJ *new_ptr;                  //new, smaller map
-  int i;
-
   ASSERT_HOST (pos >= 0);
   ASSERT_HOST (pos < len);
   ASSERT_HOST (len > 0);
 
   len--;
-  if (len > 0)
-    new_ptr = (REJ *) memset (alloc_struct (len * sizeof (REJ), "REJ"),
-      0, len * sizeof (REJ));
-  else
-    new_ptr = NULL;
-
-  for (i = 0; i < pos; i++)
-    new_ptr[i] = ptr[i];         //copy pre pos
-
-  for (; pos < len; pos++)
-    new_ptr[pos] = ptr[pos + 1]; //copy post pos
-
-                                 //delete old map
-  free_struct (ptr, (len + 1) * sizeof (REJ), "REJ");
-  ptr = new_ptr;
+  for (; pos < len; pos++) ptr[pos] = ptr[pos + 1];
 }
 
 

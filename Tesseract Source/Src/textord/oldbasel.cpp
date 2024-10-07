@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        oldbasel.cpp  (Formerly oldbl.c)
  * Description: A re-implementation of the old baseline algorithm.
- * Author:		Ray Smith
- * Created:		Wed Oct  6 09:41:48 BST 1993
+ * Author:      Ray Smith
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,40 +16,40 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
+#include <vector>       // for std::vector
 #include "ccstruct.h"
-#include          "statistc.h"
-#include          "quadlsq.h"
-#include          "detlinefit.h"
-#include          "makerow.h"
-#include          "drawtord.h"
-#include          "oldbasel.h"
-#include          "textord.h"
-#include          "tprintf.h"
+#include "statistc.h"
+#include "quadlsq.h"
+#include "detlinefit.h"
+#include "makerow.h"
+#include "drawtord.h"
+#include "oldbasel.h"
+#include "textord.h"
+#include "tprintf.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
 
-#define EXTERN
+#include <algorithm>
 
-EXTERN BOOL_VAR (textord_really_old_xheight, FALSE,
+static BOOL_VAR (textord_really_old_xheight, false,
 "Use original wiseowl xheight");
-EXTERN BOOL_VAR (textord_oldbl_debug, FALSE, "Debug old baseline generation");
-EXTERN BOOL_VAR (textord_debug_baselines, FALSE, "Debug baseline generation");
-EXTERN BOOL_VAR (textord_oldbl_paradef, TRUE, "Use para default mechanism");
-EXTERN BOOL_VAR (textord_oldbl_split_splines, TRUE, "Split stepped splines");
-EXTERN BOOL_VAR (textord_oldbl_merge_parts, TRUE, "Merge suspect partitions");
-EXTERN BOOL_VAR (oldbl_corrfix, TRUE, "Improve correlation of heights");
-EXTERN BOOL_VAR (oldbl_xhfix, FALSE,
+BOOL_VAR (textord_oldbl_debug, false, "Debug old baseline generation");
+static BOOL_VAR (textord_debug_baselines, false, "Debug baseline generation");
+static BOOL_VAR (textord_oldbl_paradef, true, "Use para default mechanism");
+static BOOL_VAR (textord_oldbl_split_splines, true, "Split stepped splines");
+static BOOL_VAR (textord_oldbl_merge_parts, true, "Merge suspect partitions");
+static BOOL_VAR (oldbl_corrfix, true, "Improve correlation of heights");
+static BOOL_VAR (oldbl_xhfix, false,
 "Fix bug in modes threshold for xheights");
-EXTERN BOOL_VAR(textord_ocropus_mode, FALSE, "Make baselines for ocropus");
-EXTERN double_VAR (oldbl_xhfract, 0.4, "Fraction of est allowed in calc");
-EXTERN INT_VAR (oldbl_holed_losscount, 10,
+static BOOL_VAR(textord_ocropus_mode, false, "Make baselines for ocropus");
+static double_VAR (oldbl_xhfract, 0.4, "Fraction of est allowed in calc");
+static INT_VAR (oldbl_holed_losscount, 10,
 "Max lost before fallback line used");
-EXTERN double_VAR (oldbl_dot_error_size, 1.26, "Max aspect ratio of a dot");
-EXTERN double_VAR (textord_oldbl_jumplimit, 0.15,
+static double_VAR (oldbl_dot_error_size, 1.26, "Max aspect ratio of a dot");
+static double_VAR (textord_oldbl_jumplimit, 0.15,
 "X fraction for new partition");
 
 #define TURNLIMIT          1     /*min size for turning point */
@@ -64,9 +63,6 @@ EXTERN double_VAR (textord_oldbl_jumplimit, 0.15,
 #define MAXOVERLAP         0.1   /*max 10% missed overlap */
 #define MAXBADRUN          2     /*max non best for failed */
 #define HEIGHTBUCKETS      200   /* Num of buckets */
-#define DELTAHEIGHT        5.0   /* Small amount of diff */
-#define GOODHEIGHT         5
-#define MAXLOOPS           10
 #define MODENUM            10
 #define MAXPARTS      6
 #define SPLINESIZE      23
@@ -81,24 +77,24 @@ namespace tesseract {
  * Top level function to make baselines the old way.
  **********************************************************************/
 
-void Textord::make_old_baselines(TO_BLOCK *block,   // block to do
-                                 BOOL8 testing_on,  // correct orientation
+void Textord::make_old_baselines(TO_BLOCK* block,   // block to do
+                                 bool testing_on,  // correct orientation
                                  float gradient) {
   QSPLINE *prev_baseline;        // baseline of previous row
   TO_ROW *row;                   // current row
   TO_ROW_IT row_it = block->get_rows();
   BLOBNBOX_IT blob_it;
 
-  prev_baseline = NULL;          // nothing yet
+  prev_baseline = nullptr;          // nothing yet
   for (row_it.mark_cycle_pt(); !row_it.cycled_list(); row_it.forward()) {
     row = row_it.data();
-    find_textlines(block, row, 2, NULL);
-    if (row->xheight <= 0 && prev_baseline != NULL)
+    find_textlines(block, row, 2, nullptr);
+    if (row->xheight <= 0 && prev_baseline != nullptr)
       find_textlines(block, row, 2, prev_baseline);
     if (row->xheight > 0) {  // was a good one
       prev_baseline = &row->baseline;
     } else {
-      prev_baseline = NULL;
+      prev_baseline = nullptr;
       blob_it.set_to_list(row->blob_list());
       if (textord_debug_baselines)
         tprintf("Row baseline generation failed on row at (%d,%d)\n",
@@ -120,10 +116,9 @@ void Textord::make_old_baselines(TO_BLOCK *block,   // block to do
  **********************************************************************/
 
 void Textord::correlate_lines(TO_BLOCK *block, float gradient) {
-  TO_ROW **rows;                 //array of ptrs
   int rowcount;                  /*no of rows to do */
-  register int rowindex;         /*no of row */
-                                 //iterator
+  int rowindex;                  /*no of row */
+                                 // iterator
   TO_ROW_IT row_it = block->get_rows ();
 
   rowcount = row_it.length ();
@@ -132,17 +127,18 @@ void Textord::correlate_lines(TO_BLOCK *block, float gradient) {
     block->xheight = block->line_size;
     return;                      /*none to do */
   }
-  rows = (TO_ROW **) alloc_mem (rowcount * sizeof (TO_ROW *));
+  // array of ptrs
+  std::vector <TO_ROW *> rows(rowcount);
   rowindex = 0;
   for (row_it.mark_cycle_pt (); !row_it.cycled_list (); row_it.forward ())
                                  //make array
     rows[rowindex++] = row_it.data ();
 
                                  /*try to fix bad lines */
-  correlate_neighbours(block, rows, rowcount);
+  correlate_neighbours(block, &rows[0], rowcount);
 
   if (textord_really_old_xheight || textord_old_xheight) {
-    block->xheight = (float) correlate_with_stats(rows, rowcount, block);
+    block->xheight = static_cast<float>(correlate_with_stats(&rows[0], rowcount, block));
     if (block->xheight <= 0)
       block->xheight = block->line_size * tesseract::CCStruct::kXHeightFraction;
     if (block->xheight < textord_min_xheight)
@@ -150,8 +146,6 @@ void Textord::correlate_lines(TO_BLOCK *block, float gradient) {
   } else {
     compute_block_xheight(block, gradient);
   }
-
-  free_mem(rows);
 }
 
 
@@ -165,8 +159,8 @@ void Textord::correlate_neighbours(TO_BLOCK *block,  // block rows are in.
                                    TO_ROW **rows,    // rows of block.
                                    int rowcount) {   // no of rows to do.
   TO_ROW *row;                   /*current row */
-  register int rowindex;         /*no of row */
-  register int otherrow;         /*second row */
+  int rowindex;                  /*no of row */
+  int otherrow;                  /*second row */
   int upperrow;                  /*row above to use */
   int lowerrow;                  /*row below to use */
   float biggest;
@@ -205,7 +199,7 @@ void Textord::correlate_neighbours(TO_BLOCK *block,  // block rows are in.
     if (row->xheight < 0)        /*linear failed */
                                  /*make do */
         row->xheight = -row->xheight;
-    biggest = MAX (biggest, row->xheight);
+    biggest = std::max(biggest, row->xheight);
   }
 }
 
@@ -221,7 +215,7 @@ int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
                                   int rowcount,   // no of rows to do.
                                   TO_BLOCK* block) {
   TO_ROW *row;                   /*current row */
-  register int rowindex;         /*no of row */
+  int rowindex;                  /*no of row */
   float lineheight;              /*mean x-height */
   float ascheight;               /*average ascenders */
   float minascheight;            /*min allowed ascheight */
@@ -231,7 +225,6 @@ int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
   float descheight;              /*mean descender drop */
   float mindescheight;           /*min allowed descheight */
   int desccount;                 /*no of samples */
-  float xshift;                  /*shift in xheight */
 
                                  /*no samples */
   xcount = fullcount = desccount = 0;
@@ -280,14 +273,12 @@ int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
   mindescheight = -lineheight * MIN_DESC_FRACTION;
   for (rowindex = 0; rowindex < rowcount; rowindex++) {
     row = rows[rowindex];        /*do each row */
-    row->all_caps = FALSE;
+    row->all_caps = false;
     if (row->ascrise / row->xheight < MIN_ASC_FRACTION) {
     /*no ascenders */
       if (row->xheight >= lineheight * (1 - MAXHEIGHTVARIANCE)
       && row->xheight <= lineheight * (1 + MAXHEIGHTVARIANCE)) {
         row->ascrise = fullheight - lineheight;
-                                 /*shift in x */
-        xshift = lineheight - row->xheight;
                                  /*set to average */
         row->xheight = lineheight;
 
@@ -295,18 +286,16 @@ int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
       else if (row->xheight >= fullheight * (1 - MAXHEIGHTVARIANCE)
       && row->xheight <= fullheight * (1 + MAXHEIGHTVARIANCE)) {
         row->ascrise = row->xheight - lineheight;
-        xshift = -row->ascrise;  /*shift in x */
                                  /*set to average */
         row->xheight = lineheight;
-        row->all_caps = TRUE;
+        row->all_caps = true;
       }
       else {
         row->ascrise = (fullheight - lineheight) * row->xheight
           / fullheight;
-        xshift = -row->ascrise;  /*shift in x */
                                  /*scale it */
         row->xheight -= row->ascrise;
-        row->all_caps = TRUE;
+        row->all_caps = true;
       }
       if (row->ascrise < minascheight)
         row->ascrise =
@@ -321,7 +310,7 @@ int Textord::correlate_with_stats(TO_ROW **rows,  // rows of block.
         row->descdrop = -row->xheight * DESCENDER_FRACTION;
     }
   }
-  return (int) lineheight;       //block xheight
+  return static_cast<int>(lineheight);       //block xheight
 }
 
 
@@ -336,30 +325,30 @@ void Textord::find_textlines(TO_BLOCK *block,  // block row is in
                              int degree,       // required approximation
                              QSPLINE *spline) {  // starting spline
   int partcount;                 /*no of partitions of */
-  BOOL8 holed_line = FALSE;      //lost too many blobs
+  bool holed_line = false;      //lost too many blobs
   int bestpart;                  /*biggest partition */
-  char *partids;                 /*partition no of each blob */
   int partsizes[MAXPARTS];       /*no in each partition */
   int lineheight;                /*guessed x-height */
   float jumplimit;               /*allowed delta change */
-  int *xcoords;                  /*useful sample points */
-  int *ycoords;                  /*useful sample points */
-  TBOX *blobcoords;               /*edges of blob rectangles */
   int blobcount;                 /*no of blobs on line */
-  float *ydiffs;                 /*diffs from 1st approx */
   int pointcount;                /*no of coords */
   int xstarts[SPLINESIZE + 1];   //segment boundaries
   int segments;                  //no of segments
 
                                  //no of blobs in row
   blobcount = row->blob_list ()->length ();
-  partids = (char *) alloc_mem (blobcount * sizeof (char));
-  xcoords = (int *) alloc_mem (blobcount * sizeof (int));
-  ycoords = (int *) alloc_mem (blobcount * sizeof (int));
-  blobcoords = (TBOX *) alloc_mem (blobcount * sizeof (TBOX));
-  ydiffs = (float *) alloc_mem (blobcount * sizeof (float));
+  // partition no of each blob
+  std::vector<char> partids(blobcount);
+  // useful sample points
+  std::vector<int> xcoords(blobcount);
+  // useful sample points
+  std::vector<int> ycoords(blobcount);
+  // edges of blob rectangles
+  std::vector<TBOX> blobcoords(blobcount);
+  // diffs from 1st approx
+  std::vector<float> ydiffs(blobcount);
 
-  lineheight = get_blob_coords (row, (int) block->line_size, blobcoords,
+  lineheight = get_blob_coords(row, static_cast<int>(block->line_size), &blobcoords[0],
     holed_line, blobcount);
                                  /*limit for line change */
   jumplimit = lineheight * textord_oldbl_jumplimit;
@@ -372,40 +361,34 @@ void Textord::find_textlines(TO_BLOCK *block,  // block row is in
       block->line_size, lineheight, jumplimit);
   }
   if (holed_line)
-    make_holed_baseline (blobcoords, blobcount, spline, &row->baseline,
+    make_holed_baseline(&blobcoords[0], blobcount, spline, &row->baseline,
       row->line_m ());
   else
-    make_first_baseline (blobcoords, blobcount,
-      xcoords, ycoords, spline, &row->baseline, jumplimit);
+    make_first_baseline(&blobcoords[0], blobcount,
+      &xcoords[0], &ycoords[0], spline, &row->baseline, jumplimit);
 #ifndef GRAPHICS_DISABLED
   if (textord_show_final_rows)
     row->baseline.plot (to_win, ScrollView::GOLDENROD);
 #endif
   if (blobcount > 1) {
-    bestpart = partition_line (blobcoords, blobcount,
-      &partcount, partids, partsizes,
-      &row->baseline, jumplimit, ydiffs);
-    pointcount = partition_coords (blobcoords, blobcount,
-      partids, bestpart, xcoords, ycoords);
-    segments = segment_spline (blobcoords, blobcount,
-      xcoords, ycoords,
-      degree, pointcount, xstarts);
+    bestpart = partition_line(&blobcoords[0], blobcount,
+      &partcount, &partids[0], partsizes,
+      &row->baseline, jumplimit, &ydiffs[0]);
+    pointcount = partition_coords(&blobcoords[0], blobcount,
+      &partids[0], bestpart, &xcoords[0], &ycoords[0]);
+    segments = segment_spline(&blobcoords[0], blobcount,
+      &xcoords[0], &ycoords[0], degree, pointcount, xstarts);
     if (!holed_line) {
       do {
-        row->baseline = QSPLINE (xstarts, segments,
-          xcoords, ycoords, pointcount, degree);
+        row->baseline = QSPLINE(xstarts, segments,
+          &xcoords[0], &ycoords[0], pointcount, degree);
       }
       while (textord_oldbl_split_splines
         && split_stepped_spline (&row->baseline, jumplimit / 2,
-        xcoords, xstarts, segments));
+        &xcoords[0], xstarts, segments));
     }
-    find_lesser_parts(row,
-                      blobcoords,
-                      blobcount,
-                      partids,
-                      partsizes,
-                      partcount,
-                      bestpart);
+    find_lesser_parts(row, &blobcoords[0], blobcount,
+                      &partids[0], partsizes, partcount, bestpart);
 
   }
   else {
@@ -414,24 +397,19 @@ void Textord::find_textlines(TO_BLOCK *block,  // block row is in
     row->ascrise = 0.0f;
   }
   row->baseline.extrapolate (row->line_m (),
-    block->block->bounding_box ().left (),
-    block->block->bounding_box ().right ());
+    block->block->pdblk.bounding_box ().left (),
+    block->block->pdblk.bounding_box ().right ());
 
   if (textord_really_old_xheight) {
-    old_first_xheight (row, blobcoords, lineheight,
+    old_first_xheight (row, &blobcoords[0], lineheight,
       blobcount, &row->baseline, jumplimit);
   } else if (textord_old_xheight) {
-    make_first_xheight (row, blobcoords, lineheight, (int) block->line_size,
+    make_first_xheight (row, &blobcoords[0], lineheight, static_cast<int>(block->line_size),
                         blobcount, &row->baseline, jumplimit);
   } else {
     compute_row_xheight(row, block->block->classify_rotation(),
                         row->line_m(), block->line_size);
   }
-  free_mem(partids);
-  free_mem(xcoords);
-  free_mem(ycoords);
-  free_mem(blobcoords);
-  free_mem(ydiffs);
 }
 
 }  // namespace tesseract.
@@ -445,15 +423,15 @@ void Textord::find_textlines(TO_BLOCK *block,  // block row is in
  **********************************************************************/
 
 int get_blob_coords(                    //get boxes
-                    TO_ROW *row,        //row to use
-                    inT32 lineheight,   //block level
-                    TBOX *blobcoords,    //ouput boxes
-                    BOOL8 &holed_line,  //lost a lot of blobs
-                    int &outcount       //no of real blobs
-                   ) {
+        TO_ROW* row,        //row to use
+        int32_t lineheight,   //block level
+        TBOX* blobcoords,    //output boxes
+        bool& holed_line,  //lost a lot of blobs
+        int& outcount       //no of real blobs
+) {
                                  //blobs
   BLOBNBOX_IT blob_it = row->blob_list ();
-  register int blobindex;        /*no along text line */
+  int blobindex;                 /*no along text line */
   int losscount;                 //lost blobs
   int maxlosscount;              //greatest lost blobs
                                  /*height stat collection */
@@ -499,7 +477,7 @@ int get_blob_coords(                    //get boxes
 
   if (heightstat.get_total () > 1)
                                  /*guess x-height */
-    return (int) heightstat.ile (0.25);
+    return static_cast<int>(heightstat.ile (0.25));
   else
     return blobcoords[0].height ();
 }
@@ -543,7 +521,7 @@ float jumplimit                  /*guess half descenders */
   leftedge = blobcoords[0].left ();
                                  /*right edge of line */
   rightedge = blobcoords[blobcount - 1].right ();
-  if (spline == NULL             /*no given spline */
+  if (spline == nullptr             /*no given spline */
     || spline->segments < 3      /*or trivial */
                                  /*or too non-overlap */
     || spline->xcoords[1] > leftedge + MAXOVERLAP * (rightedge - leftedge)
@@ -641,7 +619,7 @@ float jumplimit                  /*guess half descenders */
   }
   else {
     *baseline = *spline;         /*copy it */
-    shift = ICOORD (0, (inT16) (blobcoords[0].bottom ()
+    shift = ICOORD (0, static_cast<int16_t>(blobcoords[0].bottom ()
       - spline->y (blobcoords[0].right ())));
     baseline->move (shift);
   }
@@ -671,7 +649,7 @@ float gradient                   //of line
   ICOORD shift;                  //shift of spline
 
   tesseract::DetLineFit lms;  // straight baseline
-  inT32 xstarts[2];              //straight line
+  int32_t xstarts[2];              //straight line
   double coeffs[3];
   float c;                       //line parameter
 
@@ -691,7 +669,7 @@ float gradient                   //of line
   coeffs[1] = gradient;
   coeffs[2] = c;
   *baseline = QSPLINE (1, xstarts, coeffs);
-  if (spline != NULL             /*no given spline */
+  if (spline != nullptr             /*no given spline */
     && spline->segments >= 3     /*or trivial */
                                  /*or too non-overlap */
     && spline->xcoords[1] <= leftedge + MAXOVERLAP * (rightedge - leftedge)
@@ -699,7 +677,7 @@ float gradient                   //of line
   - MAXOVERLAP * (rightedge - leftedge)) {
     *baseline = *spline;         /*copy it */
     x = (leftedge + rightedge) / 2.0;
-    shift = ICOORD (0, (inT16) (gradient * x + c - spline->y (x)));
+    shift = ICOORD (0, static_cast<int16_t>(gradient * x + c - spline->y (x)));
     baseline->move (shift);
   }
 }
@@ -725,7 +703,7 @@ QSPLINE * spline,                /*curve to fit to */
 float jumplimit,                 /*allowed delta change */
 float ydiffs[]                   /*diff from spline */
 ) {
-  register int blobindex;        /*no along text line */
+  int blobindex;                 /*no along text line */
   int bestpart;                  /*best new partition */
   int biggestpart;               /*part with most members */
   float diff;                    /*difference from line */
@@ -804,9 +782,9 @@ int partsizes[],                 /*no in each partition */
 int biggestpart,                 //major partition
 float jumplimit                  /*allowed delta change */
 ) {
-  BOOL8 found_one;               //found a bestpart blob
-  BOOL8 close_one;               //found was close enough
-  register int blobindex;        /*no along text line */
+  bool found_one;               //found a bestpart blob
+  bool close_one;               //found was close enough
+  int blobindex;                 /*no along text line */
   int prevpart;                  //previous iteration
   int runlength;                 //no in this part
   float diff;                    /*difference from line */
@@ -837,14 +815,14 @@ float jumplimit                  /*allowed delta change */
         c = stats.get_c ();
         if (textord_oldbl_debug)
           tprintf ("Fitted line y=%g x + %g\n", m, c);
-        found_one = FALSE;
-        close_one = FALSE;
+        found_one = false;
+        close_one = false;
         for (test_blob = 1; !found_one
           && (startx - test_blob >= 0
         || blobindex + test_blob <= blobcount); test_blob++) {
           if (startx - test_blob >= 0
           && partids[startx - test_blob] == biggestpart) {
-            found_one = TRUE;
+            found_one = true;
             coord = FCOORD ((blobcoords[startx - test_blob].left ()
               + blobcoords[startx -
               test_blob].right ()) /
@@ -857,11 +835,11 @@ float jumplimit                  /*allowed delta change */
                 ("Diff of common blob to suspect part=%g at (%g,%g)\n",
                 diff, coord.x (), coord.y ());
             if (diff < jumplimit && -diff < jumplimit)
-              close_one = TRUE;
+              close_one = true;
           }
           if (blobindex + test_blob <= blobcount
           && partids[blobindex + test_blob - 1] == biggestpart) {
-            found_one = TRUE;
+            found_one = true;
             coord =
               FCOORD ((blobcoords[blobindex + test_blob - 1].
               left () + blobcoords[blobindex + test_blob -
@@ -874,7 +852,7 @@ float jumplimit                  /*allowed delta change */
                 ("Diff of common blob to suspect part=%g at (%g,%g)\n",
                 diff, coord.x (), coord.y ());
             if (diff < jumplimit && -diff < jumplimit)
-              close_one = TRUE;
+              close_one = true;
           }
         }
         if (close_one) {
@@ -915,7 +893,7 @@ int blobcount,                   /*no of blobs */
 QSPLINE * spline,                /*approximating spline */
 float ydiffs[]                   /*output */
 ) {
-  register int blobindex;        /*current blob */
+  int blobindex;                 /*current blob */
   int xcentre;                   /*xcoord */
   int lastx;                     /*last xcentre */
   float diffsum;                 /*sum of diffs */
@@ -926,7 +904,7 @@ float ydiffs[]                   /*output */
 
   diffsum = 0.0f;
   bestindex = 0;
-  bestsum = (float) MAX_INT32;
+  bestsum = static_cast<float>(INT32_MAX);
   drift = 0.0f;
   lastx = blobcoords[0].left ();
                                  /*do each blob in row */
@@ -961,7 +939,7 @@ float ydiffs[]                   /*output */
 
 int
 choose_partition (               //select partition
-register float diff,             /*diff from spline */
+float diff,             /*diff from spline */
 float partdiffs[],               /*diff on all parts */
 int lastpart,                    /*last assigned partition */
 float jumplimit,                 /*new part threshold */
@@ -969,7 +947,7 @@ float* drift,
 float* lastdelta,
 int *partcount                   /*no of partitions */
 ) {
-  register int partition;        /*partition no */
+  int partition;                 /*partition no */
   int bestpart;                  /*best new partition */
   float bestdelta;               /*best gap from a part */
   float delta;                   /*diff from part */
@@ -1024,61 +1002,6 @@ int *partcount                   /*no of partitions */
   return bestpart;
 }
 
-
-///*merge_partitions(partids,partcount,blobcount,bestpart) discards funny looking
-//partitions and gives all the rest partid 0*/
-//
-//merge_partitions(partids,partcount,blobcount,bestpart)
-//register char              *partids;                     /*partition numbers*/
-//int                        partcount;                    /*no of partitions*/
-//int                        blobcount;                    /*no of blobs*/
-//int                        bestpart;                     /*best partition*/
-//{
-//   register int            blobindex;                    /*no along text line*/
-//   int                     runlength;                    /*run of same partition*/
-//   int                     bestrun;                      /*biggest runlength*/
-//
-//   bestrun=0;                                            /*no runs yet*/
-//   runlength=1;
-//   for (blobindex=1;blobindex<blobcount;blobindex++)
-//   {  if (partids[blobindex]!=partids[blobindex-1])
-//      {  if (runlength>bestrun)
-//            bestrun=runlength;                           /*find biggest run*/
-//         runlength=1;                                    /*new run*/
-//      }
-//      else
-//      {  runlength++;
-//      }
-//   }
-//   if (runlength>bestrun)
-//      bestrun=runlength;
-//
-//   for (blobindex=0;blobindex<blobcount;blobindex++)
-//   {  if (blobindex<1
-//      || partids[blobindex]!=partids[blobindex-1])
-//      {  if ((blobindex+1>=blobcount
-//         || partids[blobindex]!=partids[blobindex+1])
-//                                                         /*loner*/
-//         && (bestrun>2 || partids[blobindex]!=bestpart))
-//         {  partids[blobindex]=partcount;                /*discard loner*/
-//         }
-//         else if (blobindex+1<blobcount
-//         && partids[blobindex]==partids[blobindex+1]
-//                                                         /*pair*/
-//         && (blobindex+2>=blobcount
-//         || partids[blobindex]!=partids[blobindex+2])
-//         && (bestrun>3 || partids[blobindex]!=bestpart))
-//         {  partids[blobindex]=partcount;                /*discard both*/
-//            partids[blobindex+1]=partcount;
-//         }
-//      }
-//   }
-//   for (blobindex=0;blobindex<blobcount;blobindex++)
-//   {  if (partids[blobindex]<partcount)
-//         partids[blobindex]=0;                           /*all others together*/
-//   }
-//}
-
 /**********************************************************************
  * partition_coords
  *
@@ -1095,7 +1018,7 @@ int bestpart,                    /*best new partition */
 int xcoords[],                   /*points to work on */
 int ycoords[]                    /*points to work on */
 ) {
-  register int blobindex;        /*no along text line */
+  int blobindex;                 /*no along text line */
   int pointcount;                /*no of points */
 
   pointcount = 0;
@@ -1126,8 +1049,8 @@ int ycoords[],                   /*points to work on */
 int degree, int pointcount,      /*no of points */
 int xstarts[]                    //result
 ) {
-  register int ptindex;          /*no along text line */
-  register int segment;          /*partition no */
+  int ptindex;                   /*no along text line */
+  int segment;                   /*partition no */
   int lastmin, lastmax;          /*possible turn points */
   int turnpoints[SPLINESIZE];    /*good turning points */
   int turncount;                 /*no of turning points */
@@ -1239,25 +1162,25 @@ int xstarts[]                    //result
  * split_stepped_spline
  *
  * Re-segment the spline in cases where there is a big step function.
- * Return TRUE if any were done.
+ * Return true if any were done.
  **********************************************************************/
 
-BOOL8
-split_stepped_spline (           //make xstarts
-QSPLINE * baseline,              //current shot
-float jumplimit,                 //max step fuction
-int xcoords[],                   /*points to work on */
-int xstarts[],                   //result
-int &segments                    //no of segments
+bool
+split_stepped_spline(           //make xstarts
+        QSPLINE* baseline,              //current shot
+        float jumplimit,                 //max step function
+        int* xcoords,                   /*points to work on */
+        int* xstarts,                   //result
+        int& segments                    //no of segments
 ) {
-  BOOL8 doneany;                 //return value
-  register int segment;          /*partition no */
+  bool doneany;                 //return value
+  int segment;                   /*partition no */
   int startindex, centreindex, endindex;
   float leftcoord, rightcoord;
   int leftindex, rightindex;
   float step;                    //spline step
 
-  doneany = FALSE;
+  doneany = false;
   startindex = 0;
   for (segment = 1; segment < segments - 1; segment++) {
     step = baseline->step ((xstarts[segment - 1] + xstarts[segment]) / 2.0,
@@ -1325,13 +1248,13 @@ int &segments                    //no of segments
           xcoords[leftindex]) / 2,
           (xcoords[rightindex - 1] +
           xcoords[rightindex]) / 2, segments);
-        doneany = TRUE;
+        doneany = true;
       }
       else if (textord_debug_baselines) {
         tprintf
           ("Resegmenting spline failed - insufficient pts (%d,%d,%d,%d)\n",
           startindex, centreindex, endindex,
-          (inT32) textord_spline_medianwin);
+          (int32_t) textord_spline_medianwin);
       }
     }
     //              else tprintf("Spline step at %d is %g\n",
@@ -1383,13 +1306,12 @@ int partsizes[],                 /*size of each part */
 int partcount,                   /*no of partitions */
 int bestpart                     /*biggest partition */
 ) {
-  register int blobindex;        /*index of blob */
-  register int partition;        /*current partition */
+  int blobindex;                 /*index of blob */
+  int partition;                 /*current partition */
   int xcentre;                   /*centre of blob */
   int poscount;                  /*count of best up step */
   int negcount;                  /*count of best down step */
   float partsteps[MAXPARTS];     /*average step to part */
-  float bestpos;                 /*best up step */
   float bestneg;                 /*best down step */
   int runlength;                 /*length of bad run */
   int biggestrun;                /*biggest bad run */
@@ -1401,12 +1323,14 @@ int bestpart                     /*biggest partition */
     xcentre = (blobcoords[blobindex].left ()
       + blobcoords[blobindex].right ()) >> 1;
                                  /*in other parts */
-    if (partids[blobindex] != bestpart) {
+    int part_id =
+        static_cast<int>(static_cast<unsigned char>(partids[blobindex]));
+    if (part_id != bestpart) {
       runlength++;               /*run of non bests */
       if (runlength > biggestrun)
         biggestrun = runlength;
-      partsteps[partids[blobindex]] += blobcoords[blobindex].bottom ()
-        - row->baseline.y (xcentre);
+      partsteps[part_id] += blobcoords[blobindex].bottom()
+        - row->baseline.y(xcentre);
     }
     else
       runlength = 0;
@@ -1416,23 +1340,18 @@ int bestpart                     /*biggest partition */
   else
     row->xheight = 1.0f;         /*success */
   poscount = negcount = 0;
-  bestpos = bestneg = 0.0;       /*no step yet */
+  bestneg = 0.0;       /*no step yet */
   for (partition = 0; partition < partcount; partition++) {
     if (partition != bestpart) {
-
-	//by jetsoft divide by zero possible
-		if (partsizes[partition]==0)
-		partsteps[partition]=0;
-       else
-		partsteps[partition] /= partsizes[partition];
-	//
-
+      // by jetsoft divide by zero possible
+      if (partsizes[partition] == 0)
+        partsteps[partition] = 0;
+      else
+        partsteps[partition] /= partsizes[partition];
+      //
 
       if (partsteps[partition] >= MINASCRISE
       && partsizes[partition] > poscount) {
-                                 /*ascender rise */
-        bestpos = partsteps[partition];
-                                 /*2nd most popular */
         poscount = partsizes[partition];
       }
       if (partsteps[partition] <= -MINASCRISE
@@ -1467,8 +1386,8 @@ int blobcount,                   /*blobs in blobcoords */
 QSPLINE * baseline,              /*established */
 float jumplimit                  /*min ascender height */
 ) {
-  register int blobindex;        /*current blob */
-                                 /*height statistics */
+  int blobindex; /*current blob */
+                 /*height statistics */
   STATS heightstat (0, MAXHEIGHT);
   int height;                    /*height of blob */
   int xcentre;                   /*centre of blob */
@@ -1477,28 +1396,28 @@ float jumplimit                  /*min ascender height */
   int asccount;                  /*no of ascenders */
   float xsum;                    /*xheight sum */
   int xcount;                    /*xheight count */
-  register float diff;           /*height difference */
+  float diff;                    /*height difference */
 
   if (blobcount > 1) {
     for (blobindex = 0; blobindex < blobcount; blobindex++) {
       xcentre = (blobcoords[blobindex].left ()
         + blobcoords[blobindex].right ()) / 2;
                                  /*height of blob */
-      height = (int) (blobcoords[blobindex].top () - baseline->y (xcentre) + 0.5);
+      height = static_cast<int>(blobcoords[blobindex].top () - baseline->y (xcentre) + 0.5);
       if (height > initialheight * oldbl_xhfract
         && height > textord_min_xheight)
         heightstat.add (height, 1);
     }
     if (heightstat.get_total () > 3) {
-      lineheight = (int) heightstat.ile (0.25);
+      lineheight = static_cast<int>(heightstat.ile (0.25));
       if (lineheight <= 0)
-        lineheight = (int) heightstat.ile (0.5);
+        lineheight = static_cast<int>(heightstat.ile (0.5));
     }
     else
       lineheight = initialheight;
   }
   else {
-    lineheight = (int) (blobcoords[0].top ()
+    lineheight = static_cast<int>(blobcoords[0].top ()
       - baseline->y ((blobcoords[0].left ()
       + blobcoords[0].right ()) / 2) +
       0.5);
@@ -1524,7 +1443,7 @@ float jumplimit                  /*min ascender height */
   if (xcount > 0)
     xsum /= xcount;              /*average xheight */
   else
-    xsum = (float) lineheight;   /*guess it */
+    xsum = static_cast<float>(lineheight);   /*guess it */
   row->xheight *= xsum;
   if (asccount > 0)
     row->ascrise = ascenders / asccount - xsum;
@@ -1593,9 +1512,9 @@ float jumplimit                  /*min ascender height */
     }
   }
 
-  mode_threshold = (int) (blobcount * 0.1);
+  mode_threshold = static_cast<int>(blobcount * 0.1);
   if (oldbl_dot_error_size > 1 || oldbl_xhfix)
-    mode_threshold = (int) (mode_count * 0.1);
+    mode_threshold = static_cast<int>(mode_count * 0.1);
 
   if (textord_oldbl_debug) {
     tprintf ("blobcount=%d, mode_count=%d, mode_t=%d\n",
@@ -1636,7 +1555,7 @@ int modelist[], int modenum      //no of modes to get
 ) {
   int mode_count;
   int last_i = 0;
-  int last_max = MAX_INT32;
+  int last_max = INT32_MAX;
   int i;
   int mode;
   int total_max = 0;
@@ -1678,7 +1597,7 @@ void pick_x_height(TO_ROW * row,                    //row to do
   int y;
   int z;
   float ratio;
-  int found_one_bigger = FALSE;
+  int found_one_bigger = false;
   int best_x_height = 0;
   int best_asc = 0;
   int num_in_best;
@@ -1689,9 +1608,9 @@ void pick_x_height(TO_ROW * row,                    //row to do
       if (modelist[x] && modelist[y] &&
           heightstat->pile_count (modelist[x]) > mode_threshold &&
           (!textord_ocropus_mode ||
-           MIN(rights[modelist[x]], rights[modelist[y]]) >
-           MAX(lefts[modelist[x]], lefts[modelist[y]]))) {
-        ratio = (float) modelist[y] / (float) modelist[x];
+                  std::min(rights[modelist[x]], rights[modelist[y]]) >
+                   std::max(lefts[modelist[x]], lefts[modelist[y]]))) {
+        ratio = static_cast<float>(modelist[y]) / static_cast<float>(modelist[x]);
         if (1.2 < ratio && ratio < 1.8) {
           /* Two modes found */
           best_x_height = modelist[x];
@@ -1699,19 +1618,19 @@ void pick_x_height(TO_ROW * row,                    //row to do
 
           /* Try to get one higher */
           do {
-            found_one_bigger = FALSE;
+            found_one_bigger = false;
             for (z = 0; z < MODENUM; z++) {
               if (modelist[z] == best_x_height + 1 &&
                   (!textord_ocropus_mode ||
-                    MIN(rights[modelist[x]], rights[modelist[y]]) >
-                    MAX(lefts[modelist[x]], lefts[modelist[y]]))) {
-                ratio = (float) modelist[y] / (float) modelist[z];
+                          std::min(rights[modelist[x]], rights[modelist[y]]) >
+                            std::max(lefts[modelist[x]], lefts[modelist[y]]))) {
+                ratio = static_cast<float>(modelist[y]) / static_cast<float>(modelist[z]);
                 if ((1.2 < ratio && ratio < 1.8) &&
                                /* Should be half of best */
                     heightstat->pile_count (modelist[z]) >
                     num_in_best * 0.5) {
                   best_x_height++;
-                  found_one_bigger = TRUE;
+                  found_one_bigger = true;
                   break;
                 }
               }
@@ -1726,19 +1645,19 @@ void pick_x_height(TO_ROW * row,                    //row to do
 
           /* Try to get one higher */
           do {
-            found_one_bigger = FALSE;
+            found_one_bigger = false;
             for (z = 0; z < MODENUM; z++) {
               if (modelist[z] > best_asc &&
                   (!textord_ocropus_mode ||
-                    MIN(rights[modelist[x]], rights[modelist[y]]) >
-                    MAX(lefts[modelist[x]], lefts[modelist[y]]))) {
-                ratio = (float) modelist[z] / (float) best_x_height;
+                          std::min(rights[modelist[x]], rights[modelist[y]]) >
+                            std::max(lefts[modelist[x]], lefts[modelist[y]]))) {
+                ratio = static_cast<float>(modelist[z]) / static_cast<float>(best_x_height);
                 if ((1.2 < ratio && ratio < 1.8) &&
                                /* Should be half of best */
                     heightstat->pile_count (modelist[z]) >
                     num_in_best * 0.5) {
                   best_asc = modelist[z];
-                  found_one_bigger = TRUE;
+                  found_one_bigger = true;
                   break;
                 }
               }
@@ -1746,8 +1665,8 @@ void pick_x_height(TO_ROW * row,                    //row to do
           }
           while (found_one_bigger);
 
-          row->xheight = (float) best_x_height;
-          row->ascrise = (float) best_asc - best_x_height;
+          row->xheight = static_cast<float>(best_x_height);
+          row->ascrise = static_cast<float>(best_asc) - best_x_height;
           return;
         }
       }
@@ -1758,13 +1677,13 @@ void pick_x_height(TO_ROW * row,                    //row to do
   num_in_best = heightstat->pile_count (best_x_height);
   do {
                                  /* Try to get one higher */
-    found_one_bigger = FALSE;
+    found_one_bigger = false;
     for (z = 1; z < MODENUM; z++) {
       /* Should be half of best */
       if ((modelist[z] == best_x_height + 1) &&
       (heightstat->pile_count (modelist[z]) > num_in_best * 0.5)) {
         best_x_height++;
-        found_one_bigger = TRUE;
+        found_one_bigger = true;
         break;
       }
     }
@@ -1772,7 +1691,7 @@ void pick_x_height(TO_ROW * row,                    //row to do
   while (found_one_bigger);
 
   row->ascrise = 0.0f;
-  row->xheight = (float) best_x_height;
+  row->xheight = static_cast<float>(best_x_height);
   if (row->xheight == 0)
     row->xheight = -1.0f;
 }

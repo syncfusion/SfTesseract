@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        rejctmap.h  (Formerly rejmap.h)
  * Description: REJ and REJMAP class functions.
- * Author:		Phil Cheatle
- * Created:		Thu Jun  9 13:46:38 BST 1994
+ * Author:    Phil Cheatle
+ * Created:   Thu Jun  9 13:46:38 BST 1994
  *
  * (C) Copyright 1994, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,7 +16,7 @@
  ** limitations under the License.
  *
 
-This module may look unneccessarily verbose, but here's the philosophy...
+This module may look unnecessarily verbose, but here's the philosophy...
 
 ALL processing of the reject map is done in this module. There are lots of
 separate calls to set reject/accept flags. These have DELIBERATELY been kept
@@ -41,54 +41,50 @@ OF THIS IMPLIED TEMPORAL ORDERING OF THE FLAGS!!!!
 #ifndef           REJCTMAP_H
 #define           REJCTMAP_H
 
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
-#include          "memry.h"
-#include          "bits16.h"
-#include                   "params.h"
-#include          "notdll.h"
+#include <memory>
+#include "bits16.h"
+#include "errcode.h"
+#include "params.h"
 
-enum REJ_FLAGS
-{
+enum REJ_FLAGS {
   /* Reject modes which are NEVER overridden */
-  R_TESS_FAILURE,                // PERM Tess didnt classify
-  R_SMALL_XHT,                   // PERM Xht too small
-  R_EDGE_CHAR,                   // PERM Too close to edge of image
-  R_1IL_CONFLICT,                // PERM 1Il confusion
-  R_POSTNN_1IL,                  // PERM 1Il unrejected by NN
-  R_REJ_CBLOB,                   // PERM Odd blob
-  R_MM_REJECT,                   // PERM Matrix match rejection (m's)
-  R_BAD_REPETITION,              // TEMP Repeated char which doesn't match trend
+  R_TESS_FAILURE,    // PERM Tess didn't classify
+  R_SMALL_XHT,       // PERM Xht too small
+  R_EDGE_CHAR,       // PERM Too close to edge of image
+  R_1IL_CONFLICT,    // PERM 1Il confusion
+  R_POSTNN_1IL,      // PERM 1Il unrejected by NN
+  R_REJ_CBLOB,       // PERM Odd blob
+  R_MM_REJECT,       // PERM Matrix match rejection (m's)
+  R_BAD_REPETITION,  // TEMP Repeated char which doesn't match trend
 
   /* Initial reject modes (pre NN_ACCEPT) */
-  R_POOR_MATCH,                  // TEMP Ray's original heuristic (Not used)
-  R_NOT_TESS_ACCEPTED,           // TEMP Tess didnt accept WERD
-  R_CONTAINS_BLANKS,             // TEMP Tess failed on other chs in WERD
-  R_BAD_PERMUTER,                // POTENTIAL Bad permuter for WERD
+  R_POOR_MATCH,         // TEMP Ray's original heuristic (Not used)
+  R_NOT_TESS_ACCEPTED,  // TEMP Tess didn't accept WERD
+  R_CONTAINS_BLANKS,    // TEMP Tess failed on other chs in WERD
+  R_BAD_PERMUTER,       // POTENTIAL Bad permuter for WERD
 
   /* Reject modes generated after NN_ACCEPT but before MM_ACCEPT */
-  R_HYPHEN,                      // TEMP Post NN dodgy hyphen or full stop
-  R_DUBIOUS,                     // TEMP Post NN dodgy chars
-  R_NO_ALPHANUMS,                // TEMP No alphanumerics in word after NN
-  R_MOSTLY_REJ,                  // TEMP Most of word rejected so rej the rest
-  R_XHT_FIXUP,                   // TEMP Xht tests unsure
+  R_HYPHEN,        // TEMP Post NN dodgy hyphen or full stop
+  R_DUBIOUS,       // TEMP Post NN dodgy chars
+  R_NO_ALPHANUMS,  // TEMP No alphanumerics in word after NN
+  R_MOSTLY_REJ,    // TEMP Most of word rejected so rej the rest
+  R_XHT_FIXUP,     // TEMP Xht tests unsure
 
   /* Reject modes generated after MM_ACCEPT but before QUALITY_ACCEPT */
-  R_BAD_QUALITY,                 // TEMP Quality metrics bad for WERD
+  R_BAD_QUALITY,  // TEMP Quality metrics bad for WERD
 
   /* Reject modes generated after QUALITY_ACCEPT but before MINIMAL_REJ accep*/
-  R_DOC_REJ,                     // TEMP Document rejection
-  R_BLOCK_REJ,                   // TEMP Block rejection
-  R_ROW_REJ,                     // TEMP Row rejection
-  R_UNLV_REJ,                    // TEMP ~ turned to - or ^ turned to space
+  R_DOC_REJ,    // TEMP Document rejection
+  R_BLOCK_REJ,  // TEMP Block rejection
+  R_ROW_REJ,    // TEMP Row rejection
+  R_UNLV_REJ,   // TEMP ~ turned to - or ^ turned to space
 
-  /* Accept modes which occur inbetween the above rejection groups */
-  R_NN_ACCEPT,                   //NN acceptance
-  R_HYPHEN_ACCEPT,               //Hyphen acceptance
-  R_MM_ACCEPT,                   //Matrix match acceptance
-  R_QUALITY_ACCEPT,              //Accept word in good quality doc
-  R_MINIMAL_REJ_ACCEPT           //Accept EVERYTHING except tess failures
+  /* Accept modes which occur between the above rejection groups */
+  R_NN_ACCEPT,          // NN acceptance
+  R_HYPHEN_ACCEPT,      // Hyphen acceptance
+  R_MM_ACCEPT,          // Matrix match acceptance
+  R_QUALITY_ACCEPT,     // Accept word in good quality doc
+  R_MINIMAL_REJ_ACCEPT  // Accept EVERYTHING except tess failures
 };
 
 /* REJECT MAP VALUES */
@@ -110,16 +106,15 @@ class REJ
       flags2.turn_on_bit (rej_flag - 16);
   }
 
-  BOOL8 rej_before_nn_accept();
-  BOOL8 rej_between_nn_and_mm();
-  BOOL8 rej_between_mm_and_quality_accept();
-  BOOL8 rej_between_quality_and_minimal_rej_accept();
-  BOOL8 rej_before_mm_accept();
-  BOOL8 rej_before_quality_accept();
+  bool rej_before_nn_accept();
+  bool rej_between_nn_and_mm();
+  bool rej_between_mm_and_quality_accept();
+  bool rej_between_quality_and_minimal_rej_accept();
+  bool rej_before_mm_accept();
+  bool rej_before_quality_accept();
 
   public:
-    REJ() {  //constructor
-    }
+    REJ() = default;
 
     REJ(  //classwise copy
         const REJ &source) {
@@ -134,7 +129,7 @@ class REJ
       return *this;
     }
 
-    BOOL8 flag(REJ_FLAGS rej_flag) {
+    bool flag(REJ_FLAGS rej_flag) {
       if (rej_flag < 16)
         return flags1.bit (rej_flag);
       else
@@ -152,18 +147,18 @@ class REJ
         return MAP_ACCEPT;
     }
 
-    BOOL8 perm_rejected();  //Is char perm reject?
+    bool perm_rejected();  //Is char perm reject?
 
-    BOOL8 rejected();  //Is char rejected?
+    bool rejected();  //Is char rejected?
 
-    BOOL8 accepted() {  //Is char accepted?
+    bool accepted() {  //Is char accepted?
       return !rejected ();
     }
 
                                  //potential rej?
-    BOOL8 accept_if_good_quality();
+                                 bool accept_if_good_quality();
 
-    BOOL8 recoverable() {
+    bool recoverable() {
       return (rejected () && !perm_rejected ());
     }
 
@@ -205,56 +200,46 @@ class REJ
 
 class REJMAP
 {
-  REJ *ptr;                      //ptr to the chars
-  inT16 len;                     //Number of chars
+  std::unique_ptr<REJ[]> ptr;  // ptr to the chars
+  int16_t len;                 //Number of chars
 
-  public:
-    REJMAP() {  //constructor
-      ptr = NULL;
-      len = 0;
+ public:
+  REJMAP() : len(0) {}
+
+  REJMAP(const REJMAP &rejmap) { *this = rejmap; }
+
+  REJMAP &operator=(const REJMAP &source);
+
+  // Sets up the ptr array to length, whatever it was before.
+  void initialise(int16_t length);
+
+  REJ &operator[](         // access function
+      int16_t index) const // map index
+  {
+    ASSERT_HOST(index < len);
+    return ptr[index];  // no bounds checks
     }
 
-    REJMAP(  //classwise copy
-           const REJMAP &rejmap);
-
-    REJMAP & operator= (         //assign REJMAP
-      const REJMAP & source);    //from this
-
-    ~REJMAP () {                 //destructor
-      if (ptr != NULL)
-        free_struct (ptr, len * sizeof (REJ), "REJ");
-    }
-
-    void initialise(  //Redefine map
-                    inT16 length);
-
-    REJ & operator[](            //access function
-      inT16 index) const         //map index
-    {
-      ASSERT_HOST (index < len);
-      return ptr[index];         //no bounds checks
-    }
-
-    inT32 length() const {  //map length
+    int32_t length() const {  //map length
       return len;
     }
 
-    inT16 accept_count();  //How many accepted?
+    int16_t accept_count();  //How many accepted?
 
-    inT16 reject_count() {  //How many rejects?
+    int16_t reject_count() {  //How many rejects?
       return len - accept_count ();
     }
 
     void remove_pos(             //Cut out an element
-                    inT16 pos);  //element to remove
+                    int16_t pos);  //element to remove
 
     void print(FILE *fp);
 
     void full_print(FILE *fp);
 
-    BOOL8 recoverable_rejects();  //Any non perm rejs?
+    bool recoverable_rejects();  //Any non perm rejs?
 
-    BOOL8 quality_recoverable_rejects();
+    bool quality_recoverable_rejects();
     //Any potential rejs?
 
     void rej_word_small_xht();  //Reject whole word

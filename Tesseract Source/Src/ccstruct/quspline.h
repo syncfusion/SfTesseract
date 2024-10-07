@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        quspline.h  (Formerly qspline.h)
  * Description: Code for the QSPLINE class.
- * Author:		Ray Smith
- * Created:		Tue Oct 08 17:16:12 BST 1991
+ * Author:      Ray Smith
+ * Created:     Tue Oct 08 17:16:12 BST 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,15 +17,17 @@
  *
  **********************************************************************/
 
-#ifndef           QUSPLINE_H
-#define           QUSPLINE_H
+#ifndef QUSPLINE_H
+#define QUSPLINE_H
 
-#include          "quadratc.h"
-#include          "serialis.h"
-#include          "memry.h"
-#include          "rect.h"
+#include <cstdint>             // for int32_t
+#include "scrollview.h"        // for ScrollView, ScrollView::Color
 
+class ICOORD;
+class QUAD_COEFFS;
 class ROW;
+class TBOX;
+struct Pix;
 
 class QSPLINE
 {
@@ -41,14 +43,14 @@ class QSPLINE
   public:
     QSPLINE() {  //empty constructor
       segments = 0;
-      xcoords = NULL;            //everything empty
-      quadratics = NULL;
+      xcoords = nullptr;            //everything empty
+      quadratics = nullptr;
     }
     QSPLINE(  //copy constructor
             const QSPLINE &src);
     QSPLINE(                  //constructor
-            inT32 count,      //number of segments
-            inT32 *xstarts,   //segment starts
+            int32_t count,      //number of segments
+            int32_t *xstarts,   //segment starts
             double *coeffs);  //coefficients
     ~QSPLINE ();                 //destructor
     QSPLINE (                    //least squares fit
@@ -66,9 +68,9 @@ class QSPLINE
 
     void move(              // reposition spline
               ICOORD vec);  // by vector
-    BOOL8 overlap(                   //test overlap
-                  QSPLINE *spline2,  //2 cannot be smaller
-                  double fraction);  //by more than this
+    bool overlap(                   //test overlap
+            QSPLINE* spline2,  //2 cannot be smaller
+            double fraction);  //by more than this
     void extrapolate(                  //linear extrapolation
                      double gradient,  //gradient to use
                      int left,         //new left edge
@@ -80,15 +82,19 @@ class QSPLINE
               ScrollView::Color colour) const;  //in colour
 #endif
 
+    // Paint the baseline over pix. If pix has depth of 32, then the line will
+    // be painted in red. Otherwise it will be painted in black.
+    void plot(Pix* pix) const;
+
     QSPLINE & operator= (
       const QSPLINE & source);   //from this
 
   private:
 
-    inT32 spline_index(                  //binary search
+    int32_t spline_index(                  //binary search
                        double x) const;  //for x
-    inT32 segments;              //no of segments
-    inT32 *xcoords;              //no of coords
+    int32_t segments;              //no of segments
+    int32_t *xcoords;              //no of coords
     QUAD_COEFFS *quadratics;     //spline pieces
 };
 #endif
