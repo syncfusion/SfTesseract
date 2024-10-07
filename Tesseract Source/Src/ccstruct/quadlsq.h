@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        quadlsq.h  (Formerly qlsq.h)
  * Description: Code for least squares approximation of quadratics.
- * Author:		Ray Smith
- * Created:		Wed Oct  6 15:14:23 BST 1993
+ * Author:      Ray Smith
+ * Created:     Wed Oct  6 15:14:23 BST 1993
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +17,10 @@
  *
  **********************************************************************/
 
-#ifndef           QUADLSQ_H
-#define           QUADLSQ_H
+#ifndef QUADLSQ_H
+#define QUADLSQ_H
 
-#include          "points.h"
+#include "points.h"
 
 class QLSQ
 {
@@ -36,7 +36,7 @@ class QLSQ
     void remove(           //delete element
                 double x,  //coords to delete
                 double y);
-    inT32 count() {  //no of elements
+    int32_t count() {  //no of elements
       return n;
     }
 
@@ -53,7 +53,7 @@ class QLSQ
     }
 
   private:
-    inT32 n;                     //no of elements
+    int32_t n;                     //no of elements
     double a, b, c;              //result
     double sigx;                 //sum of x
     double sigy;                 //sum of y

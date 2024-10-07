@@ -1,14 +1,9 @@
 /* -*-C-*-
  ********************************************************************************
  *
- * File:        plotedges.c  (Formerly plotedges.c)
+ * File:         plotedges.cpp  (Formerly plotedges.c)
  * Description:  Graphics routines for "Edges" and "Outlines" windows
  * Author:       Mark Seaman, OCR Technology
- * Created:      Fri Jul 28 13:14:48 1989
- * Modified:     Tue Jul  9 17:22:22 1991 (Mark Seaman) marks@hpgrlt
- * Language:     C
- * Package:      N/A
- * Status:       Experimental (Do Not Distribute)
  *
  * (c) Copyright 1989, Hewlett-Packard Company.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,9 +17,6 @@
  ** limitations under the License.
  *
  *********************************************************************************/
-#ifdef __UNIX__
-#include <assert.h>
-#endif
 
 #include "plotedges.h"
 #include "render.h"
@@ -40,7 +32,7 @@
 /*----------------------------------------------------------------------
               V a r i a b l e s
 ----------------------------------------------------------------------*/
-ScrollView *edge_window = NULL;
+ScrollView *edge_window = nullptr;
 
 /*----------------------------------------------------------------------
               F u n c t i o n s
@@ -53,7 +45,7 @@ ScrollView *edge_window = NULL;
 void display_edgepts(LIST outlines) {
   void *window;
   /* Set up window */
-  if (edge_window == NULL) {
+  if (edge_window == nullptr) {
     edge_window = c_create_window ("Edges", 750, 150,
       400, 128, -400.0, 400.0, 0.0, 256.0);
   }
@@ -64,7 +56,7 @@ void display_edgepts(LIST outlines) {
   window = edge_window;
   /* Reclaim old memory */
   iterate(outlines) {
-    render_edgepts (window, (EDGEPT *) first_node (outlines), White);
+    render_edgepts (window, reinterpret_cast<EDGEPT *>first_node (outlines), White);
   }
 }
 
@@ -75,12 +67,11 @@ void display_edgepts(LIST outlines) {
  * Display the edges of this blob in the edges window.
  **********************************************************************/
 void draw_blob_edges(TBLOB *blob) {
-  TESSLINE *ol;
-  LIST edge_list = NIL_LIST;
-
   if (wordrec_display_splits) {
-    for (ol = blob->outlines; ol != NULL; ol = ol->next)
-      push_on (edge_list, ol->loop);
+    LIST edge_list = NIL_LIST;
+    for (TESSLINE* ol = blob->outlines; ol != nullptr; ol = ol->next) {
+      edge_list = push(edge_list, ol->loop);
+    }
     display_edgepts(edge_list);
     destroy(edge_list);
   }
@@ -116,23 +107,6 @@ void mark_outline(EDGEPT *edgept) {  /* Start of point list */
   y += 6;
   c_draw(window, x, y);
 
-  c_make_current(window);
-}
-
-
-/**********************************************************************
- * mark_split
- *
- * Set up the marks list to be displayed in subsequent updates and draw
- * the marks in the current window.  The marks are stored in the second
- * sublist. The first sublist is left unmodified.
- **********************************************************************/
-void mark_split(SPLIT *split) {
-  void *window = edge_window;
-
-  c_line_color_index(window, Green);
-  c_move (window, (float) split->point1->pos.x, (float) split->point1->pos.y);
-  c_draw (window, (float) split->point2->pos.x, (float) split->point2->pos.y);
   c_make_current(window);
 }
 

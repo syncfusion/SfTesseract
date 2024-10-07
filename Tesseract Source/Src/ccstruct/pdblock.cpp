@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        pdblock.c  (Formerly pdblk.c)
+ * File:        pdblock.cpp
  * Description: PDBLK member functions and iterator functions.
- * Author:					Ray Smith
- * Created:					Fri Mar 15 09:41:28 GMT 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,21 +16,21 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          <stdlib.h>
-#include          "allheaders.h"
-#include          "blckerr.h"
-#include          "pdblock.h"
-#include          "svshowim.h"
+#include "allheaders.h"
+#include "pdblock.h"
+#include <cstdlib>
+#include <memory>  // std::unique_ptr
+#include <cinttypes>  // for PRId32
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
 
-#include          "hpddef.h"     //must be last (handpd.dll)
-
 #define BLOCK_LABEL_HEIGHT  150  //char height of block id
+
+constexpr ERRCODE BADBLOCKLINE("Y coordinate in block out of bounds");
+constexpr ERRCODE LOSTBLOCKLINE("Can't find rectangle for line");
 
 CLISTIZE (PDBLK)
 /**********************************************************************
@@ -40,14 +39,14 @@ CLISTIZE (PDBLK)
  * Constructor for a simple rectangular block.
  **********************************************************************/
 PDBLK::PDBLK (                   //rectangular block
-inT16 xmin,                      //bottom left
-inT16 ymin, inT16 xmax,          //top right
-inT16 ymax):    box (ICOORD (xmin, ymin), ICOORD (xmax, ymax)) {
+int16_t xmin,                      //bottom left
+int16_t ymin, int16_t xmax,          //top right
+int16_t ymax):    box (ICOORD (xmin, ymin), ICOORD (xmax, ymax)) {
                                  //boundaries
   ICOORDELT_IT left_it = &leftside;
   ICOORDELT_IT right_it = &rightside;
 
-  hand_poly = NULL;
+  hand_poly = nullptr;
   left_it.set_to_list (&leftside);
   right_it.set_to_list (&rightside);
                                  //make default box
@@ -73,36 +72,35 @@ void PDBLK::set_sides(                       //set vertex lists
   ICOORDELT_IT left_it = &leftside;
   ICOORDELT_IT right_it = &rightside;
 
-  leftside.clear ();
-  left_it.move_to_first ();
-  left_it.add_list_before (left);
-  rightside.clear ();
-  right_it.move_to_first ();
-  right_it.add_list_before (right);
+  leftside.clear();
+  left_it.move_to_first();
+  left_it.add_list_before(left);
+  rightside.clear();
+  right_it.move_to_first();
+  right_it.add_list_before(right);
 }
-
 
 /**********************************************************************
  * PDBLK::contains
  *
- * Return TRUE if the given point is within the block.
+ * Return true if the given point is within the block.
  **********************************************************************/
 
-BOOL8 PDBLK::contains(           //test containment
-                      ICOORD pt  //point to test
-                     ) {
+bool PDBLK::contains(           //test containment
+        ICOORD pt  //point to test
+) {
   BLOCK_RECT_IT it = this;       //rectangle iterator
   ICOORD bleft, tright;          //corners of rectangle
 
-  for (it.start_block (); !it.cycled_rects (); it.forward ()) {
+  for (it.start_block(); !it.cycled_rects(); it.forward()) {
                                  //get rectangle
     it.bounding_box (bleft, tright);
                                  //inside rect
-    if (pt.x () >= bleft.x () && pt.x () <= tright.x ()
-      && pt.y () >= bleft.y () && pt.y () <= tright.y ())
-      return TRUE;               //is inside
+    if (pt.x() >= bleft.x() && pt.x() <= tright.x()
+      && pt.y() >= bleft.y() && pt.y() <= tright.y())
+      return true;               //is inside
   }
-  return FALSE;                  //not inside
+  return false;                  //not inside
 }
 
 
@@ -130,11 +128,11 @@ void PDBLK::move(                  // reposition block
 
 // Returns a binary Pix mask with a 1 pixel for every pixel within the
 // block. Rotates the coordinate system by rerotation prior to rendering.
-Pix* PDBLK::render_mask(const FCOORD& rerotation) {
+Pix* PDBLK::render_mask(const FCOORD& rerotation, TBOX* mask_box) {
   TBOX rotated_box(box);
   rotated_box.rotate(rerotation);
   Pix* pix = pixCreate(rotated_box.width(), rotated_box.height(), 1);
-  if (hand_poly != NULL) {
+  if (hand_poly != nullptr) {
     // We are going to rotate, so get a deep copy of the points and
     // make a new POLY_BLOCK with it.
     ICOORDELT_LIST polygon;
@@ -143,11 +141,12 @@ Pix* PDBLK::render_mask(const FCOORD& rerotation) {
     image_block.rotate(rerotation);
     // Block outline is a polygon, so use a PB_LINE_IT to get the
     // rasterized interior. (Runs of interior pixels on a line.)
-    PB_LINE_IT *lines = new PB_LINE_IT(&image_block);
+    auto *lines = new PB_LINE_IT(&image_block);
     for (int y = box.bottom(); y < box.top(); ++y) {
-      ICOORDELT_LIST* segments = lines->get_line(y);
+      const std::unique_ptr</*non-const*/ ICOORDELT_LIST> segments(
+          lines->get_line(y));
       if (!segments->empty()) {
-        ICOORDELT_IT s_it(segments);
+        ICOORDELT_IT s_it(segments.get());
         // Each element of segments is a start x and x size of the
         // run of interior pixels.
         for (s_it.mark_cycle_pt(); !s_it.cycled_list(); s_it.forward()) {
@@ -156,17 +155,17 @@ Pix* PDBLK::render_mask(const FCOORD& rerotation) {
           // Set the run of pixels to 1.
           pixRasterop(pix, start - rotated_box.left(),
                       rotated_box.height() - 1 - (y - rotated_box.bottom()),
-                      xext, 1, PIX_SET, NULL, 0, 0);
+                      xext, 1, PIX_SET, nullptr, 0, 0);
         }
       }
-      delete segments;
     }
     delete lines;
   } else {
     // Just fill the whole block as there is only a bounding box.
     pixRasterop(pix, 0, 0, rotated_box.width(), rotated_box.height(),
-                PIX_SET, NULL, 0, 0);
+                PIX_SET, nullptr, 0, 0);
   }
+  if (mask_box != nullptr) *mask_box = rotated_box;
   return pix;
 }
 
@@ -180,7 +179,7 @@ Pix* PDBLK::render_mask(const FCOORD& rerotation) {
 #ifndef GRAPHICS_DISABLED
 void PDBLK::plot(                //draw outline
                  ScrollView* window,  //window to draw in
-                 inT32 serial,   //serial number
+                 int32_t serial,   //serial number
                  ScrollView::Color colour   //colour to draw in
                 ) {
   ICOORD startpt;                //start of outline
@@ -192,18 +191,18 @@ void PDBLK::plot(                //draw outline
   window->Pen(colour);
   window->TextAttributes("Times", BLOCK_LABEL_HEIGHT, false, false, false);
 
-  if (hand_poly != NULL) {
+  if (hand_poly != nullptr) {
     hand_poly->plot(window, serial);
   } else if (!leftside.empty ()) {
     startpt = *(it.data ());     //bottom left corner
     //              tprintf("Block %d bottom left is (%d,%d)\n",
     //                      serial,startpt.x(),startpt.y());
     char temp_buff[34];
-    #ifdef __UNIX__
-    sprintf(temp_buff, INT32FORMAT, serial);
-    #else
-    ultoa (serial, temp_buff, 10);
-    #endif
+#if !defined(_WIN32) || defined(__MINGW32__)
+    snprintf(temp_buff, sizeof(temp_buff), "%" PRId32, serial);
+#else
+    _ultoa(serial, temp_buff, 10);
+#endif
     window->Text(startpt.x (), startpt.y (), temp_buff);
 
     window->SetCursor(startpt.x (), startpt.y ());
@@ -232,33 +231,6 @@ void PDBLK::plot(                //draw outline
   }
 }
 #endif
-
-
-/**********************************************************************
- * PDBLK::show
- *
- * Show the image corresponding to a block as its set of rectangles.
- **********************************************************************/
-
-#ifndef GRAPHICS_DISABLED
-void PDBLK::show(               //show image block
-                 IMAGE *image,  //image to show
-                 ScrollView* window  //window to show in
-                ) {
-  BLOCK_RECT_IT it = this;       //rectangle iterator
-  ICOORD bleft, tright;          //corners of rectangle
-
-  for (it.start_block (); !it.cycled_rects (); it.forward ()) {
-                                 //get rectangle
-    it.bounding_box (bleft, tright);
-    //              tprintf("Drawing a block with a bottom left of (%d,%d)\n",
-    //                      bleft.x(),bleft.y());
-                                 //show it
-    sv_show_sub_image (image, bleft.x (), bleft.y (), tright.x () - bleft.x (), tright.y () - bleft.y (), window, bleft.x (), bleft.y ());
-  }
-}
-#endif
-
 
 /**********************************************************************
  * PDBLK::operator=
@@ -372,9 +344,9 @@ void BLOCK_RECT_IT::forward() {  //next rectangle
  * Get the the start and width of a line in the block.
  **********************************************************************/
 
-inT16 BLOCK_LINE_IT::get_line(             //get a line
-                              inT16 y,     //line to get
-                              inT16 &xext  //output extent
+int16_t BLOCK_LINE_IT::get_line(             //get a line
+                              int16_t y,     //line to get
+                              int16_t &xext  //output extent
                              ) {
   ICOORD bleft;                  //bounding box
   ICOORD tright;                 //of block & rect
@@ -382,7 +354,7 @@ inT16 BLOCK_LINE_IT::get_line(             //get a line
                                  //get block box
   block->bounding_box (bleft, tright);
   if (y < bleft.y () || y >= tright.y ()) {
-    //              block->print(stderr,FALSE);
+    //              block->print(stderr,false);
     BADBLOCKLINE.error ("BLOCK_LINE_IT::get_line", ABORT, "Y=%d", y);
   }
 

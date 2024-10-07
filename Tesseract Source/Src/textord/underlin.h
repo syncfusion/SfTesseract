@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        underlin.h  (Formerly undrline.h)
  * Description: Code to chop blobs apart from underlines.
- * Author:		Ray Smith
- * Created:		Mon Aug  8 11:14:00 BST 1994
+ * Author:      Ray Smith
  *
  * (C) Copyright 1994, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,11 +20,10 @@
 #define           UNDERLIN_H
 
 #include          "fpchop.h"
-#include          "notdll.h"
 
 extern double_VAR_H (textord_underline_offset, 0.1,
 "Fraction of x to ignore");
-extern BOOL_VAR_H (textord_restore_underlines, FALSE,
+extern BOOL_VAR_H (textord_restore_underlines, false,
 "Chop underlines & put back");
 void restore_underlined_blobs(                 //get chop points
                               TO_BLOCK *block  //block to do

@@ -17,37 +17,40 @@
  *
  **********************************************************************/
 
-#ifndef           OCRROW_H
-#define           OCRROW_H
+#ifndef OCRROW_H
+#define OCRROW_H
 
-#include <stdio.h>
+#include <cstdint>      // for int16_t, int32_t
+#include <cstdio>       // for FILE
+#include "elst.h"       // for ELIST_ITERATOR, ELISTIZEH, ELIST_LINK
+#include "quspline.h"   // for QSPLINE
+#include "rect.h"       // for TBOX
+#include "scrollview.h" // for ScrollView, ScrollView::Color
+#include "werd.h"       // for WERD_LIST
 
-#include "quspline.h"
-#include "werd.h"
-
+class ICOORD;
 class TO_ROW;
 
-class PARA;
+struct PARA;
 
 class ROW:public ELIST_LINK
 {
   friend void tweak_row_baseline(ROW *, double, double);
   public:
-    ROW() {
-    }                            //empty constructor
+    ROW() = default;
     ROW(                    //constructor
-        inT32 spline_size,  //no of segments
-        inT32 *xstarts,     //segment boundaries
+        int32_t spline_size,  //no of segments
+        int32_t *xstarts,     //segment boundaries
         double *coeffs,     //coefficients //ascender size
         float x_height,
         float ascenders,
         float descenders,   //descender size
-        inT16 kern,         //char gap
-        inT16 space);       //word gap
+        int16_t kern,         //char gap
+        int16_t space);       //word gap
     ROW(               //constructor
         TO_ROW *row,   //textord row
-        inT16 kern,    //char gap
-        inT16 space);  //word gap
+        int16_t kern,    //char gap
+        int16_t space);  //word gap
 
     WERD_LIST *word_list() {  //get words
       return &words;
@@ -56,7 +59,7 @@ class ROW:public ELIST_LINK
     float base_line(                     //compute baseline
                     float xpos) const {  //at the position
                                  //get spline value
-      return (float) baseline.y (xpos);
+      return static_cast<float>(baseline.y (xpos));
     }
     float x_height() const {  //return x height
       return xheight;
@@ -64,7 +67,7 @@ class ROW:public ELIST_LINK
     void set_x_height(float new_xheight) {  // set x height
       xheight = new_xheight;
     }
-    inT32 kern() const {  //return kerning
+    int32_t kern() const {  //return kerning
       return kerning;
     }
     float body_size() const {  //return body size
@@ -73,7 +76,7 @@ class ROW:public ELIST_LINK
     void set_body_size(float new_size) {  // set body size
       bodysize = new_size;
     }
-    inT32 space() const {  //return spacing
+    int32_t space() const {  //return spacing
       return spacing;
     }
     float ascenders() const {  //return size
@@ -85,17 +88,20 @@ class ROW:public ELIST_LINK
     TBOX bounding_box() const {  //return bounding box
       return bound_box;
     }
+    // Returns the bounding box including the desired combination of upper and
+    // lower noise/diacritic elements.
+    TBOX restricted_bounding_box(bool upper_dots, bool lower_dots) const;
 
-    void set_lmargin(inT16 lmargin) {
+    void set_lmargin(int16_t lmargin) {
       lmargin_ = lmargin;
     }
-    void set_rmargin(inT16 rmargin) {
+    void set_rmargin(int16_t rmargin) {
       rmargin_ = rmargin;
     }
-    inT16 lmargin() const {
+    int16_t lmargin() const {
       return lmargin_;
     }
-    inT16 rmargin() const {
+    int16_t rmargin() const {
       return rmargin_;
     }
 
@@ -121,25 +127,28 @@ class ROW:public ELIST_LINK
     void print(            //print
                FILE *fp);  //file to print on
 
+    #ifndef GRAPHICS_DISABLED
     void plot(                 //draw one
               ScrollView* window,   //window to draw in
               ScrollView::Color colour);  //uniform colour
     void plot(                 //draw one
               ScrollView* window);  //in rainbow colours
 
-#ifndef GRAPHICS_DISABLED
     void plot_baseline(                  //draw the baseline
                        ScrollView* window,    //window to draw in
                        ScrollView::Color colour) {  //colour to draw
                                  //draw it
       baseline.plot (window, colour);
     }
-#endif
+    #endif  // GRAPHICS_DISABLED
     ROW& operator= (const ROW & source);
 
   private:
-    inT32 kerning;               //inter char gap
-    inT32 spacing;               //inter word gap
+    // Copy constructor (currently unused, therefore private).
+    ROW(const ROW& source);
+
+    int32_t kerning;               //inter char gap
+    int32_t spacing;               //inter word gap
     TBOX bound_box;              //bounding box
     float xheight;               //height of line
     float ascrise;               //size of ascenders
@@ -151,8 +160,8 @@ class ROW:public ELIST_LINK
 
     // These get set after blocks have been determined.
     bool has_drop_cap_;
-    inT16 lmargin_;   // Distance to left polyblock margin.
-    inT16 rmargin_;   // Distance to right polyblock margin.
+    int16_t lmargin_;   // Distance to left polyblock margin.
+    int16_t rmargin_;   // Distance to right polyblock margin.
 
     // This gets set during paragraph analysis.
     PARA *para_;      // Paragraph of which this row is part.

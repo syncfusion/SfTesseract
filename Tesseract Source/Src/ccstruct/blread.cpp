@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        blread.cpp  (Formerly pdread.c)
  * Description: Friend function of BLOCK to read the uscan pd file.
- * Author:		Ray Smith
- * Created:		Mon Mar 18 14:39:00 GMT 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,14 +16,10 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          <stdlib.h>
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
-#include          "scanutils.h"
-#include          "fileerr.h"
-#include          "blread.h"
+#include "blread.h"
+#include <cstdio>       // for fclose, fopen, FILE
+#include "ocrblock.h"   // for BLOCK_IT, BLOCK, BLOCK_LIST (ptr only)
+#include "scanutils.h"  // for tfscanf
 
 #define UNLV_EXT  ".uzn"  // unlv zone file
 
@@ -36,8 +31,8 @@
 
 bool read_unlv_file(                    //print list of sides
                      STRING name,        //basename of file
-                     inT32 xsize,        //image size
-                     inT32 ysize,        //image size
+                     int32_t xsize,        //image size
+                     int32_t ysize,        //image size
                      BLOCK_LIST *blocks  //output list
                     ) {
   FILE *pdfp;                    //file pointer
@@ -49,25 +44,25 @@ bool read_unlv_file(                    //print list of sides
   BLOCK_IT block_it = blocks;    //block iterator
 
   name += UNLV_EXT;              //add extension
-  if ((pdfp = fopen (name.string (), "rb")) == NULL) {
+  if ((pdfp = fopen (name.string (), "rb")) == nullptr) {
     return false;                //didn't read one
-  }
-  else {
-    while (fscanf (pdfp, "%d %d %d %d %*s", &x, &y, &width, &height) >= 4) {
+  } else {
+    while (tfscanf(pdfp, "%d %d %d %d %*s", &x, &y, &width, &height) >= 4) {
                                  //make rect block
-      block = new BLOCK (name.string (), TRUE, 0, 0,
-                         (inT16) x, (inT16) (ysize - y - height),
-                         (inT16) (x + width), (inT16) (ysize - y));
+      block = new BLOCK (name.string (), true, 0, 0,
+                         static_cast<int16_t>(x), static_cast<int16_t>(ysize - y - height),
+                         static_cast<int16_t>(x + width), static_cast<int16_t>(ysize - y));
                                  //on end of list
       block_it.add_to_end (block);
     }
     fclose(pdfp);
   }
+  tprintf("UZN file %s loaded.\n", name.string());
   return true;
 }
 
 void FullPageBlock(int width, int height, BLOCK_LIST *blocks) {
   BLOCK_IT block_it(blocks);
-  BLOCK* block = new BLOCK("", TRUE, 0, 0, 0, 0, width, height);
+  auto* block = new BLOCK("", true, 0, 0, 0, 0, width, height);
   block_it.add_to_end(block);
 }

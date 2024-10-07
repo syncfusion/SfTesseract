@@ -1,17 +1,11 @@
 /******************************************************************************
-**  Filename:  mftraining.c
-**  Purpose:  Separates training pages into files for each character.
-**        Strips from files only the features and there parameters of
-        the feature type mf.
-**  Author:    Dan Johnson
-**  Revisment:  Christy Russon
-**  Environment: HPUX 6.5
-**  Library:     HPUX 6.5
-**  History:     Fri Aug 18 08:53:50 1989, DSJ, Created.
-**         5/25/90, DSJ, Adapted to multiple feature types.
-**        Tuesday, May 17, 1998 Changes made to make feature specific and
-**        simplify structures. First step in simplifying training process.
-**
+ ** Filename:   mftraining.c
+ ** Purpose:    Separates training pages into files for each character.
+ **             Strips from files only the features and there parameters of
+ **             the feature type mf.
+ ** Author:     Dan Johnson
+ ** Revisment:  Christy Russon
+ **
  **  (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
@@ -23,26 +17,23 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
 ******************************************************************************/
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
           Include Files and Type Defines
-----------------------------------------------------------------------------**/
-#include <string.h>
-#include <stdio.h>
-#define _USE_MATH_DEFINES
-#include <math.h>
-#ifdef _WIN32
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
+----------------------------------------------------------------------------*/
+
+#define _USE_MATH_DEFINES       // for M_PI
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
 #endif
-#endif
+
+#include <cmath>                // for M_PI
+#include <cstring>
+#include <cstdio>
 
 #include "classify.h"
 #include "cluster.h"
 #include "clusttool.h"
 #include "commontraining.h"
-#include "danerror.h"
-#include "efio.h"
-#include "emalloc.h"
 #include "featdefs.h"
 #include "fontinfo.h"
 #include "genericvector.h"
@@ -51,7 +42,6 @@
 #include "mastertrainer.h"
 #include "mergenf.h"
 #include "mf.h"
-#include "ndminx.h"
 #include "ocrfeatures.h"
 #include "oldlist.h"
 #include "protos.h"
@@ -60,28 +50,13 @@
 #include "tprintf.h"
 #include "unicity_table.h"
 
-using tesseract::Classify;
-using tesseract::FontInfo;
-using tesseract::FontSpacingInfo;
 using tesseract::IndexMapBiDi;
 using tesseract::MasterTrainer;
 using tesseract::Shape;
 using tesseract::ShapeTable;
 
-#define PROGRAM_FEATURE_TYPE "mf"
-
 // Max length of a fake shape label.
 const int kMaxShapeLabelLength = 10;
-
-DECLARE_STRING_PARAM_FLAG(test_ch);
-
-/**----------------------------------------------------------------------------
-          Public Function Prototypes
-----------------------------------------------------------------------------**/
-int main (
-     int  argc,
-     char  **argv);
-
 
 /*----------------------------------------------------------------------------
             Public Code
@@ -147,7 +122,7 @@ static LIST ClusterOneConfig(int shape_id, const char* class_label,
                                          clusterer->SampleSize);
   FreeClusterer(clusterer);
   MERGE_CLASS merge_class = FindClass(mf_classes, class_label);
-  if (merge_class == NULL) {
+  if (merge_class == nullptr) {
     merge_class = NewLabeledClass(class_label);
     mf_classes = push(mf_classes, merge_class);
   }
@@ -169,7 +144,7 @@ static LIST ClusterOneConfig(int shape_id, const char* class_label,
       MakeNewFromOld(&dummy_proto, prototype);
       // Merge with the similar proto.
       ComputeMergedProto(ProtoIn(merge_class->Class, p_id), &dummy_proto,
-                         static_cast<FLOAT32>(merge_class->NumMerged[p_id]),
+                         static_cast<float>(merge_class->NumMerged[p_id]),
                          1.0,
                          ProtoIn(merge_class->Class, p_id));
       merge_class->NumMerged[p_id]++;
@@ -204,52 +179,46 @@ static void SetupConfigMap(ShapeTable* shape_table, IndexMapBiDi* config_map) {
   config_map->CompleteMerges();
 }
 
-/*---------------------------------------------------------------------------*/
+/**
+ * This program reads in a text file consisting of feature
+ * samples from a training page in the following format:
+ * @verbatim
+      FontName UTF8-char-str xmin ymin xmax ymax page-number
+       NumberOfFeatureTypes(N)
+         FeatureTypeName1 NumberOfFeatures(M)
+            Feature1
+            ...
+            FeatureM
+         FeatureTypeName2 NumberOfFeatures(M)
+            Feature1
+            ...
+            FeatureM
+         ...
+         FeatureTypeNameN NumberOfFeatures(M)
+            Feature1
+            ...
+            FeatureM
+      FontName CharName ...
+    @endverbatim
+ * The result of this program is a binary inttemp file used by
+ * the OCR engine.
+ * @param  argc  number of command line arguments
+ * @param  argv  array of command line arguments
+ * @return 0 if no error occurred
+ */
 int main (int argc, char **argv) {
-/*
-**  Parameters:
-**    argc  number of command line arguments
-**    argv  array of command line arguments
-**  Globals: none
-**  Operation:
-**    This program reads in a text file consisting of feature
-**    samples from a training page in the following format:
-**
-**      FontName UTF8-char-str xmin ymin xmax ymax page-number
-**       NumberOfFeatureTypes(N)
-**         FeatureTypeName1 NumberOfFeatures(M)
-**            Feature1
-**            ...
-**            FeatureM
-**         FeatureTypeName2 NumberOfFeatures(M)
-**            Feature1
-**            ...
-**            FeatureM
-**         ...
-**         FeatureTypeNameN NumberOfFeatures(M)
-**            Feature1
-**            ...
-**            FeatureM
-**      FontName CharName ...
-**
-**    The result of this program is a binary inttemp file used by
-**    the OCR engine.
-**  Return: none
-**  Exceptions: none
-**  History:  Fri Aug 18 08:56:17 1989, DSJ, Created.
-**        Mon May 18 1998, Christy Russson, Revistion started.
-*/
+  tesseract::CheckSharedLibraryVersion();
+
   ParseArguments(&argc, &argv);
 
-  ShapeTable* shape_table = NULL;
+  ShapeTable* shape_table = nullptr;
   STRING file_prefix;
   // Load the training data.
   MasterTrainer* trainer = tesseract::LoadTrainingData(argc, argv,
                                                        false,
                                                        &shape_table,
                                                        &file_prefix);
-  if (trainer == NULL)
-    return 1;  // Failed.
+  if (trainer == nullptr) return 1;  // Failed.
 
   // Setup an index mapping from the shapes in the shape table to the classes
   // that will be trained. In keeping with the original design, each shape
@@ -305,6 +274,9 @@ int main (int argc, char **argv) {
                                     *shape_table, float_classes,
                                     inttemp_file.string(),
                                     pffmtable_file.string());
+  for (int c = 0; c < unicharset->size(); ++c) {
+    FreeClassFields(&float_classes[c]);
+  }
   delete [] float_classes;
   FreeLabeledClassList(mf_classes);
   delete trainer;

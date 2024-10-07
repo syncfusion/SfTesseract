@@ -27,6 +27,8 @@
 #include "tesseractclass.h"
 #include "unicharset.h"
 #include "unicodes.h"
+#include <set>
+#include <vector>
 
 namespace tesseract {
 
@@ -34,6 +36,13 @@ ResultIterator::ResultIterator(const LTRResultIterator &resit)
     : LTRResultIterator(resit) {
   in_minor_direction_ = false;
   at_beginning_of_minor_run_ = false;
+  preserve_interword_spaces_ = false;
+
+  auto *p = ParamUtils::FindParam<BoolParam>(
+      "preserve_interword_spaces", GlobalParams()->bool_params,
+      tesseract_->params()->bool_params);
+  if (p != nullptr) preserve_interword_spaces_ = (bool)(*p);
+
   current_paragraph_is_ltr_ = CurrentParagraphIsLtr();
   MoveToLogicalStartOfTextline();
 }
@@ -230,7 +239,7 @@ void ResultIterator::CalculateTextlineOrder(
     GenericVectorEqEq<int> *word_indices) const {
   GenericVector<StrongScriptDirection> dirs;
   GenericVector<StrongScriptDirection> *directions;
-  directions = (dirs_arg != NULL) ? dirs_arg : &dirs;
+  directions = (dirs_arg != nullptr) ? dirs_arg : &dirs;
   directions->truncate(0);
 
   // A LTRResultIterator goes strictly left-to-right word order.
@@ -376,11 +385,9 @@ void ResultIterator::AppendSuffixMarks(STRING *text) const {
     *text += reading_direction_is_ltr ? kLRM : kRLM;
   } else if (last_non_word_mark == kMinorRunEnd) {
     if (current_paragraph_is_ltr_) {
-      *text += kRLM;
       *text += kLRM;
     } else {
       *text += kRLM;
-      *text += kLRM;
     }
   }
 }
@@ -414,7 +421,7 @@ void ResultIterator::Begin() {
 }
 
 bool ResultIterator::Next(PageIteratorLevel level) {
-  if (it_->block() == NULL) return false; // already at end!
+  if (it_->block() == nullptr) return false; // already at end!
   switch (level) {
     case RIL_BLOCK:  // explicit fall-through
     case RIL_PARA:   // explicit fall-through
@@ -427,7 +434,7 @@ bool ResultIterator::Next(PageIteratorLevel level) {
       }
       in_minor_direction_ = false;
       MoveToLogicalStartOfTextline();
-      return it_->block() != NULL;
+      return it_->block() != nullptr;
     case RIL_SYMBOL:
     {
       GenericVector<int> blob_order;
@@ -445,9 +452,10 @@ bool ResultIterator::Next(PageIteratorLevel level) {
       }
       level = RIL_WORD;  // we've fallen through to the next word.
     }
+      // Fall through.
     case RIL_WORD:  // explicit fall-through.
     {
-      if (it_->word() == NULL) return Next(RIL_BLOCK);
+      if (it_->word() == nullptr) return Next(RIL_BLOCK);
       GenericVectorEqEq<int> word_indices;
       int this_word_index = LTRWordIndex();
       CalculateTextlineOrder(current_paragraph_is_ltr_,
@@ -489,8 +497,8 @@ bool ResultIterator::Next(PageIteratorLevel level) {
 }
 
 bool ResultIterator::IsAtBeginningOf(PageIteratorLevel level) const {
-  if (it_->block() == NULL) return false;  // Already at the end!
-  if (it_->word() == NULL) return true;  // In an image block.
+  if (it_->block() == nullptr) return false;  // Already at the end!
+  if (it_->word() == nullptr) return true;  // In an image block.
   if (level == RIL_SYMBOL) return true;  // Always at beginning of a symbol.
 
   bool at_word_start = IsAtFirstSymbolOfWord();
@@ -544,12 +552,18 @@ bool ResultIterator::IsAtFinalElement(PageIteratorLevel level,
   return true;
 }
 
+// Returns the number of blanks before the current word.
+int ResultIterator::BlanksBeforeWord() const {
+  if (CurrentParagraphIsLtr()) return LTRResultIterator::BlanksBeforeWord();
+  return IsAtBeginningOf(RIL_TEXTLINE) ? 0 : 1;
+}
+
 /**
  * Returns the null terminated UTF-8 encoded text string for the current
  * object at the given level. Use delete [] to free after use.
  */
 char* ResultIterator::GetUTF8Text(PageIteratorLevel level) const {
-  if (it_->word() == NULL) return NULL;  // Already at the end!
+  if (it_->word() == nullptr) return nullptr;  // Already at the end!
   STRING text;
   switch (level) {
     case RIL_BLOCK:
@@ -580,7 +594,7 @@ char* ResultIterator::GetUTF8Text(PageIteratorLevel level) const {
         if (at_beginning_of_minor_run_) {
           text += reading_direction_is_ltr ? kLRM : kRLM;
         }
-        text = it_->word()->BestUTF8(blob_index_, !reading_direction_is_ltr);
+        text = it_->word()->BestUTF8(blob_index_, false);
         if (IsAtFinalSymbolOfWord()) AppendSuffixMarks(&text);
       }
       break;
@@ -591,9 +605,18 @@ char* ResultIterator::GetUTF8Text(PageIteratorLevel level) const {
   return result;
 }
 
+std::vector<std::vector<std::pair<const char*, float>>>*
+  ResultIterator::GetBestLSTMSymbolChoices() const {
+  if (it_->word() != nullptr) {
+    return &it_->word()->timesteps;
+  } else {
+    return nullptr;
+  }
+}
+
 void ResultIterator::AppendUTF8WordText(STRING *text) const {
   if (!it_->word()) return;
-  ASSERT_HOST(it_->word()->best_choice != NULL);
+  ASSERT_HOST(it_->word()->best_choice != nullptr);
   bool reading_direction_is_ltr =
       current_paragraph_is_ltr_ ^ in_minor_direction_;
   if (at_beginning_of_minor_run_) {
@@ -603,7 +626,7 @@ void ResultIterator::AppendUTF8WordText(STRING *text) const {
   GenericVector<int> blob_order;
   CalculateBlobOrder(&blob_order);
   for (int i = 0; i < blob_order.size(); i++) {
-    *text += it_->word()->BestUTF8(blob_order[i], !reading_direction_is_ltr);
+    *text += it_->word()->BestUTF8(blob_order[i], false);
   }
   AppendSuffixMarks(text);
 }
@@ -631,18 +654,25 @@ void ResultIterator::IterateAndAppendUTF8TextlineText(STRING *text) {
 
   int words_appended = 0;
   do {
+    int numSpaces = preserve_interword_spaces_ ? it_->word()->word->space()
+                                               : (words_appended > 0);
+    for (int i = 0; i < numSpaces; ++i) {
+      *text += " ";
+    }
     AppendUTF8WordText(text);
     words_appended++;
-    *text += " ";
+    if (BidiDebug(2)) {
+      tprintf("Num spaces=%d, text=%s\n", numSpaces, text->string());
+    }
   } while (Next(RIL_WORD) && !IsAtBeginningOf(RIL_TEXTLINE));
   if (BidiDebug(1)) {
     tprintf("%d words printed\n", words_appended);
   }
-  text->truncate_at(text->length() - 1);
   *text += line_separator_;
   // If we just finished a paragraph, add an extra newline.
-  if (it_->block() == NULL || IsAtBeginningOf(RIL_PARA))
+  if (IsAtBeginningOf(RIL_PARA)) {
     *text += paragraph_separator_;
+  }
 }
 
 void ResultIterator::AppendUTF8ParagraphText(STRING *text) const {
@@ -652,15 +682,15 @@ void ResultIterator::AppendUTF8ParagraphText(STRING *text) const {
   if (it.Empty(RIL_WORD)) return;
   do {
     it.IterateAndAppendUTF8TextlineText(text);
-  } while (it.it_->block() != NULL && !it.IsAtBeginningOf(RIL_PARA));
+  } while (it.it_->block() != nullptr && !it.IsAtBeginningOf(RIL_PARA));
 }
 
 bool ResultIterator::BidiDebug(int min_level) const {
   int debug_level = 1;
-  IntParam *p = ParamUtils::FindParam<IntParam>(
+  auto *p = ParamUtils::FindParam<IntParam>(
       "bidi_debug", GlobalParams()->int_params,
       tesseract_->params()->int_params);
-  if (p != NULL) debug_level = (inT32)(*p);
+  if (p != nullptr) debug_level = (int32_t)(*p);
   return debug_level >= min_level;
 }
 

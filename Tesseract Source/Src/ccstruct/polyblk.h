@@ -1,8 +1,6 @@
 /**********************************************************************
  * File:        polyblk.h  (Formerly poly_block.h)
  * Description: Polygonal blocks
- * Author:					Sheelagh Lloyd?
- * Created:
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,8 +14,9 @@
  ** limitations under the License.
  *
  **********************************************************************/
-#ifndef           POLYBLK_H
-#define           POLYBLK_H
+
+#ifndef POLYBLK_H
+#define POLYBLK_H
 
 #include "publictypes.h"
 #include "elst.h"
@@ -25,17 +24,13 @@
 #include "rect.h"
 #include "scrollview.h"
 
-#include          "hpddef.h"     // must be last (handpd.dll)
-
 class DLLSYM POLY_BLOCK {
  public:
-  POLY_BLOCK() {
-  }
+  POLY_BLOCK() = default;
   // Initialize from box coordinates.
-  POLY_BLOCK(const TBOX& box, PolyBlockType type);
+  POLY_BLOCK(const TBOX& tbox, PolyBlockType type);
   POLY_BLOCK(ICOORDELT_LIST *points, PolyBlockType type);
-  ~POLY_BLOCK () {
-  }
+  ~POLY_BLOCK () = default;
 
   TBOX *bounding_box() {  // access function
     return &box;
@@ -63,9 +58,11 @@ class DLLSYM POLY_BLOCK {
   // Move by adding shift to all coordinates.
   void move(ICOORD shift);
 
-  void plot(ScrollView* window, inT32 num);
+  void plot(ScrollView* window, int32_t num);
 
+  #ifndef GRAPHICS_DISABLED
   void fill(ScrollView* window, ScrollView::Color colour);
+  #endif  // GRAPHICS_DISABLED
 
   // Returns true if other is inside this.
   bool contains(POLY_BLOCK *other);
@@ -76,12 +73,13 @@ class DLLSYM POLY_BLOCK {
   // Returns the winding number of this around the test_pt.
   // Positive for anticlockwise, negative for clockwise, and zero for
   // test_pt outside this.
-  inT16 winding_number(const ICOORD &test_pt);
+  int16_t winding_number(const ICOORD &test_pt);
 
+  #ifndef GRAPHICS_DISABLED
   // Static utility functions to handle the PolyBlockType.
-
   // Returns a color to draw the given type.
   static ScrollView::Color ColorForPolyBlockType(PolyBlockType type);
+  #endif  // GRAPHICS_DISABLED
 
  private:
   ICOORDELT_LIST vertices;     // vertices
@@ -104,7 +102,7 @@ class DLLSYM PB_LINE_IT {
   // Each element of the returned list is the start (x) and extent(y) of
   // a run inside the region.
   // Delete the returned list after use.
-  ICOORDELT_LIST *get_line(inT16 y);
+  ICOORDELT_LIST *get_line(int16_t y);
 
  private:
   POLY_BLOCK * block;

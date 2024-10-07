@@ -16,22 +16,24 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_CCUTIL_CCUTIL_H__
-#define TESSERACT_CCUTIL_CCUTIL_H__
+#ifndef TESSERACT_CCUTIL_CCUTIL_H_
+#define TESSERACT_CCUTIL_CCUTIL_H_
 
-#include "ambigs.h"
-#include "errcode.h"
-#include "strngs.h"
-#include "tessdatamanager.h"
-#include "params.h"
-#include "unicharset.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#else
+#ifndef _WIN32
 #include <pthread.h>
 #include <semaphore.h>
 #endif
+
+#ifndef DISABLED_LEGACY_ENGINE
+#include "ambigs.h"
+#endif
+#include "errcode.h"
+#ifdef _WIN32
+#include "host.h" // windows.h for HANDLE, ...
+#endif
+#include "strngs.h"
+#include "params.h"
+#include "unicharset.h"
 
 namespace tesseract {
 
@@ -68,9 +70,10 @@ class CCUtil {
   STRING imagebasename;  // name of image
   STRING lang;
   STRING language_data_path_prefix;
-  TessdataManager tessdata_manager;
   UNICHARSET unicharset;
+#ifndef DISABLED_LEGACY_ENGINE
   UnicharAmbigs unichar_ambigs;
+#endif
   STRING imagefile;  // image file name
   STRING directory;  // main directory
 
@@ -81,19 +84,11 @@ class CCUtil {
   // Member parameters.
   // These have to be declared and initialized after params_ member, since
   // params_ should be initialized before parameters are added to it.
-  STRING_VAR_H(m_data_sub_dir, "tessdata/", "Directory for data files");
-  #ifdef _WIN32
-  STRING_VAR_H(tessedit_module_name, WINDLLNAME,
-               "Module colocated with tessdata dir");
-  #endif
   INT_VAR_H(ambigs_debug_level, 0, "Debug level for unichar ambiguities");
-  BOOL_VAR_H(use_definite_ambigs_for_classifier, 0,
-             "Use definite ambiguities when running character classifier");
-  BOOL_VAR_H(use_ambigs_for_adaption, 0,
+  BOOL_VAR_H(use_ambigs_for_adaption, false,
              "Use ambigs for deciding whether to adapt to a character");
 };
 
-extern CCUtilMutex tprintfMutex;  // should remain global
 }  // namespace tesseract
 
-#endif  // TESSERACT_CCUTIL_CCUTIL_H__
+#endif  // TESSERACT_CCUTIL_CCUTIL_H_

@@ -18,8 +18,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_WORKINGPARSET_H__
-#define TESSERACT_TEXTORD_WORKINGPARSET_H__
+#ifndef TESSERACT_TEXTORD_WORKINGPARSET_H_
+#define TESSERACT_TEXTORD_WORKINGPARSET_H_
 
 #include "blobbox.h"       // For TO_BLOCK_LIST and BLOCK_LIST.
 #include "colpartition.h"  // For ColPartition_LIST.
@@ -31,10 +31,8 @@ namespace tesseract {
 // therefore only used during construction of the regions.
 class WorkingPartSet : public ELIST_LINK {
  public:
-  WorkingPartSet() {
-  }
   explicit WorkingPartSet(ColPartition* column)
-    : column_(column), latest_part_(NULL), part_it_(&part_set_) {
+    : column_(column), latest_part_(nullptr), part_it_(&part_set_) {
   }
 
   // Simple accessors.
@@ -87,5 +85,4 @@ ELISTIZEH(WorkingPartSet)
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_TEXTORD_WORKINGPARSET_H__
-
+#endif  // TESSERACT_TEXTORD_WORKINGPARSET_H_

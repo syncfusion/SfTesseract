@@ -1,10 +1,9 @@
 /******************************************************************************
- **	Filename:    mfdefs.c
- **	Purpose:     Basic routines for manipulating micro-features
- **	Author:      Dan Johnson
- **	History:     Mon Jan 22 08:48:58 1990, DSJ, Created.
+ ** Filename:    mfdefs.cpp
+ ** Purpose:     Basic routines for manipulating micro-features
+ ** Author:      Dan Johnson
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,44 +14,31 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "mfdefs.h"
 #include "emalloc.h"
-#include <math.h>
+#include <cmath>
 
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
               Public Code
 ----------------------------------------------------------------------------**/
-/*---------------------------------------------------------------------------*/
-MICROFEATURE NewMicroFeature() { 
-/*
- **	Parameters: none
- **	Globals: none
- **	Operation:
- **		This routine allocates and returns a new micro-feature
- **		data structure.
- **	Return: New micro-feature.
- **	Exceptions: none
- **	History: 7/27/89, DSJ, Created.
+
+/**
+ * This routine allocates and returns a new micro-feature
+ * data structure.
+ * @return New MICROFEATURE
  */
-  return ((MICROFEATURE) Emalloc (sizeof (MFBLOCK)));
+MICROFEATURE NewMicroFeature() {
+  return (static_cast<MICROFEATURE>(Emalloc (sizeof (MFBLOCK))));
 }                                /* NewMicroFeature */
 
-
-/*---------------------------------------------------------------------------*/
-void FreeMicroFeatures(MICROFEATURES MicroFeatures) { 
-/*
- **	Parameters:
- **		MicroFeatures	list of micro-features to be freed
- **	Globals: none
- **	Operation:
- **		This routine deallocates all of the memory consumed by
- **		a list of micro-features.
- **	Return: none
- **	Exceptions: none
- **	History: 7/27/89, DSJ, Created.
+/**
+ * This routine deallocates all of the memory consumed by
+ * a list of micro-features.
+ * @param MicroFeatures list of micro-features to be freed
  */
-  destroy_nodes(MicroFeatures, Efree); 
+void FreeMicroFeatures(MICROFEATURES MicroFeatures) {
+  destroy_nodes(MicroFeatures, Efree);
 }                                /* FreeMicroFeatures */

@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        mod128.c  (Formerly dir128.c)
+ * File:        mod128.cpp  (Formerly dir128.c)
  * Description: Code to convert a DIR128 to an ICOORD.
- * Author:					Ray Smith
- * Created:					Tue Oct 22 11:56:09 BST 1991
+ * Author:          Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +16,9 @@
  *
  **********************************************************************/
 
-#include          "mfcpch.h"     //precompiled headers
-#include          "mod128.h"
+#include "mod128.h"
 
-const inT16 idirtab[] = {
+static const int16_t idirtab[] = {
   1000, 0, 998, 49, 995, 98, 989, 146,
   980, 195, 970, 242, 956, 290, 941, 336,
   923, 382, 903, 427, 881, 471, 857, 514,
@@ -55,7 +53,7 @@ const inT16 idirtab[] = {
   980, -195, 989, -146, 995, -98, 998, -49
 };
 
-const ICOORD *dirtab = (ICOORD *) idirtab;
+static const ICOORD* dirtab = reinterpret_cast<const ICOORD*>(idirtab);
 
 /**********************************************************************
  * DIR128::DIR128
@@ -86,15 +84,4 @@ DIR128::DIR128(                 //from fcoord
   }
   while (high - low > 1);
   dir = low;
-}
-
-
-/**********************************************************************
- * dir_to_gradient
- *
- * Convert a direction to a vector.
- **********************************************************************/
-
-ICOORD DIR128::vector() const {  //convert to vector
-  return dirtab[dir];            //easy really
 }

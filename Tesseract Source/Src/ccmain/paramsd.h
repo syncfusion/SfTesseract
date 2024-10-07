@@ -1,8 +1,7 @@
 ///////////////////////////////////////////////////////////////////////
-// File:        paramsd.cpp
+// File:        paramsd.h
 // Description: Tesseract parameter editor
 // Author:      Joern Wanke
-// Created:     Wed Jul 18 10:05:01 PDT 2007
 //
 // (C) Copyright 2007, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,16 +18,24 @@
 //
 // Tesseract parameter editor is used to edit all the parameters used
 // within tesseract from the ui.
-#ifndef GRAPHICS_DISABLED
-#ifndef VARABLED_H
-#define VARABLED_H
+#ifndef TESSERACT_CCMAIN_PARAMSD_H_
+#define TESSERACT_CCMAIN_PARAMSD_H_
 
-#include "elst.h"
-#include "scrollview.h"
-#include "params.h"
-#include "tesseractclass.h"
+#ifndef GRAPHICS_DISABLED
+
+#include "elst.h"        // for ELIST_ITERATOR, ELISTIZEH, ELIST_LINK
+#include "scrollview.h"  // for ScrollView (ptr only), SVEvent (ptr only)
+#include "strngs.h"      // for STRING
 
 class SVMenuNode;
+
+namespace tesseract {
+  class BoolParam;
+  class DoubleParam;
+  class IntParam;
+  class StringParam;
+  class Tesseract;
+}
 
 // A list of all possible parameter types used.
 enum ParamType {
@@ -52,17 +59,16 @@ class ParamContent : public ELIST_LINK {
   static ParamContent* GetParamContentById(int id);
 
   // Constructors for the various ParamTypes.
-  ParamContent() {
-  }
-  ParamContent(tesseract::StringParam* it);
-  ParamContent(tesseract::IntParam* it);
-  ParamContent(tesseract::BoolParam* it);
-  ParamContent(tesseract::DoubleParam* it);
+  ParamContent() = default;
+  explicit ParamContent(tesseract::StringParam* it);
+  explicit ParamContent(tesseract::IntParam* it);
+  explicit ParamContent(tesseract::BoolParam* it);
+  explicit ParamContent(tesseract::DoubleParam* it);
 
 
   // Getters and Setters.
   void SetValue(const char* val);
-  const char* GetValue() const;
+  STRING GetValue() const;
   const char* GetName() const;
   const char* GetDescription() const;
 
@@ -73,14 +79,16 @@ class ParamContent : public ELIST_LINK {
   // The unique ID of this VC object.
   int my_id_;
   // Whether the parameter was changed_ and thus needs to be rewritten.
-  bool changed_;
+  bool changed_ = false;
   // The actual ParamType of this VC object.
   ParamType param_type_;
 
-  tesseract::StringParam* sIt;
-  tesseract::IntParam* iIt;
-  tesseract::BoolParam* bIt;
-  tesseract::DoubleParam* dIt;
+  union {
+    tesseract::StringParam* sIt;
+    tesseract::IntParam* iIt;
+    tesseract::BoolParam* bIt;
+    tesseract::DoubleParam* dIt;
+  };
 };
 
 ELISTIZEH(ParamContent)
@@ -93,10 +101,10 @@ class ParamsEditor : public SVEventHandler {
   // Integrate the parameters editor as popupmenu into the existing scrollview
   // window (usually the pg editor). If sv == null, create a new empty
   // empty window and attach the parameter editor to that window (ugly).
-  ParamsEditor(tesseract::Tesseract*, ScrollView* sv = NULL);
+  explicit ParamsEditor(tesseract::Tesseract*, ScrollView* sv = nullptr);
 
   // Event listener. Waits for SVET_POPUP events and processes them.
-  void Notify(const SVEvent* sve);
+  void Notify(const SVEvent* sve) override;
 
  private:
   // Gets the up to the first 3 prefixes from s (split by _).
@@ -120,5 +128,5 @@ class ParamsEditor : public SVEventHandler {
   ScrollView* sv_window_;
 };
 
-#endif
-#endif
+#endif  // GRAPHICS_DISABLED
+#endif  // TESSERACT_CCMAIN_PARAMSD_H_

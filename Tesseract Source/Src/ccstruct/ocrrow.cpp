@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        ocrrow.cpp  (Formerly row.c)
  * Description: Code for the ROW class.
- * Author:					Ray Smith
- * Created:					Tue Oct 08 15:58:04 BST 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,9 +16,8 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          "ocrrow.h"
-#include          "blobbox.h"
+#include "ocrrow.h"
+#include "blobbox.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
@@ -34,17 +32,17 @@ ELISTIZE (ROW)
  * The words are added directly.
  **********************************************************************/
 ROW::ROW (                       //constructor
-inT32 spline_size,               //no of segments
-inT32 * xstarts,                 //segment boundaries
+int32_t spline_size,               //no of segments
+int32_t * xstarts,                 //segment boundaries
 double *coeffs,                  //coefficients
 float x_height,                  //line height
 float ascenders,                 //ascender size
 float descenders,                //descender drop
-inT16 kern,                      //char gap
-inT16 space                      //word gap
+int16_t kern,                      //char gap
+int16_t space                      //word gap
 )
     : baseline(spline_size, xstarts, coeffs),
-      para_(NULL) {
+      para_(nullptr) {
   kerning = kern;                //just store stuff
   spacing = space;
   xheight = x_height;
@@ -66,9 +64,9 @@ inT16 space                      //word gap
 
 ROW::ROW(                 //constructor
          TO_ROW *to_row,  //source row
-         inT16 kern,      //char gap
-         inT16 space      //word gap
-        ) : para_(NULL) {
+         int16_t kern,      //char gap
+         int16_t space      //word gap
+        ) : para_(nullptr) {
   kerning = kern;                //just store stuff
   spacing = space;
   xheight = to_row->xheight;
@@ -81,6 +79,17 @@ ROW::ROW(                 //constructor
   rmargin_ = 0;
 }
 
+// Returns the bounding box including the desired combination of upper and
+// lower noise/diacritic elements.
+TBOX ROW::restricted_bounding_box(bool upper_dots, bool lower_dots) const {
+  TBOX box;
+  // This is a read-only iteration of the words in the row.
+  WERD_IT it(const_cast<WERD_LIST *>(&words));
+  for (it.mark_cycle_pt(); !it.cycled_list(); it.forward()) {
+    box += it.data()->restricted_bounding_box(upper_dots, lower_dots);
+  }
+  return box;
+}
 
 /**********************************************************************
  * ROW::recalc_bounding_box
@@ -91,8 +100,8 @@ ROW::ROW(                 //constructor
 void ROW::recalc_bounding_box() {  //recalculate BB
   WERD *word;                    //current word
   WERD_IT it = &words;           //words of ROW
-  inT16 left;                    //of word
-  inT16 prev_left;               //old left
+  int16_t left;                    //of word
+  int16_t prev_left;               //old left
 
   if (!it.empty ()) {
     word = it.data ();
@@ -114,15 +123,15 @@ void ROW::recalc_bounding_box() {  //recalculate BB
   for (it.mark_cycle_pt (); !it.cycled_list (); it.forward ()) {
     word = it.data ();
     if (it.at_first ())
-      word->set_flag (W_BOL, TRUE);
+      word->set_flag (W_BOL, true);
     else
                                  //not start of line
-      word->set_flag (W_BOL, FALSE);
+      word->set_flag (W_BOL, false);
     if (it.at_last ())
-      word->set_flag (W_EOL, TRUE);
+      word->set_flag(W_EOL, true);
     else
                                  //not end of line
-      word->set_flag (W_EOL, FALSE);
+      word->set_flag(W_EOL, false);
                                  //extend BB as reqd
     bound_box += word->bounding_box ();
   }
@@ -187,7 +196,6 @@ void ROW::plot(                //draw it
     word->plot (window, colour); //all in one colour
   }
 }
-#endif
 
 /**********************************************************************
  * ROW::plot
@@ -195,7 +203,6 @@ void ROW::plot(                //draw it
  * Draw the ROW in rainbow colours.
  **********************************************************************/
 
-#ifndef GRAPHICS_DISABLED
 void ROW::plot(               //draw it
                ScrollView* window  //window to draw in
               ) {
@@ -207,7 +214,7 @@ void ROW::plot(               //draw it
     word->plot (window);         //in rainbow colours
   }
 }
-#endif
+#endif  // GRAPHICS_DISABLED
 
 /**********************************************************************
  * ROW::operator=

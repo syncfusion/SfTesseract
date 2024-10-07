@@ -13,8 +13,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TRAINING_TRAININGSAMPLESET_H__
-#define TESSERACT_TRAINING_TRAININGSAMPLESET_H__
+#ifndef TESSERACT_TRAINING_TRAININGSAMPLESET_H_
+#define TESSERACT_TRAINING_TRAININGSAMPLESET_H_
 
 #include "bitvector.h"
 #include "genericvector.h"
@@ -24,15 +24,15 @@
 #include "trainingsample.h"
 
 class UNICHARSET;
-template <typename T> class UnicityTable;
 
 namespace tesseract {
 
 struct FontInfo;
+class FontInfoTable;
 class IntFeatureMap;
 class IntFeatureSpace;
 class TrainingSample;
-class UnicharAndFonts;
+struct UnicharAndFonts;
 
 // Collection of TrainingSample used for training or testing a classifier.
 // Provides several useful methods to operate on the collection as a whole,
@@ -42,7 +42,7 @@ class UnicharAndFonts;
 // metrics.
 class TrainingSampleSet {
  public:
-  explicit TrainingSampleSet(const UnicityTable<FontInfo>& fontinfo_table);
+  explicit TrainingSampleSet(const FontInfoTable& fontinfo_table);
   ~TrainingSampleSet();
 
   // Writes to the given file. Returns false in case of error.
@@ -66,6 +66,9 @@ class TrainingSampleSet {
   }
   int charsetsize() const {
     return unicharset_size_;
+  }
+  const FontInfoTable& fontinfo_table() const {
+    return fontinfo_table_;
   }
 
   // Loads an initial unicharset, or sets one up if the file cannot be read.
@@ -161,16 +164,12 @@ class TrainingSampleSet {
   // Gets ownership of the sample with the given index, removing it from this.
   TrainingSample* extract_sample(int index) {
     TrainingSample* sample = samples_[index];
-    samples_[index] = NULL;
+    samples_[index] = nullptr;
     return sample;
   }
 
   // Generates indexed features for all samples with the supplied feature_space.
   void IndexFeatures(const IntFeatureSpace& feature_space);
-
-  // Delete outlier samples with few features that are shared with others.
-  // IndexFeatures must have been called already.
-  void DeleteOutliers(const IntFeatureSpace& feature_space, bool debug);
 
   // Marks the given sample for deletion.
   // Deletion is actually completed by DeleteDeadSamples.
@@ -239,13 +238,13 @@ class TrainingSampleSet {
     bool DeSerialize(bool swap, FILE* fp);
 
     // Number of raw samples.
-    inT32 num_raw_samples;
+    int32_t num_raw_samples;
     // Index of the canonical sample.
-    inT32 canonical_sample;
+    int32_t canonical_sample;
     // Max distance of the canonical sample from any other.
     float canonical_dist;
     // Sample indices for the samples, including replicated.
-    GenericVector<inT32> samples;
+    GenericVector<int32_t> samples;
 
     // Non-serialized cache data.
     // Indexed features of the canonical sample.
@@ -281,7 +280,7 @@ class TrainingSampleSet {
 
   // Reference to the fontinfo_table_ in MasterTrainer. Provides names
   // for font_ids in the samples. Not serialized!
-  const UnicityTable<FontInfo>& fontinfo_table_;
+  const FontInfoTable& fontinfo_table_;
 };
 
 }  // namespace tesseract.

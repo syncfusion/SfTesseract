@@ -1,10 +1,9 @@
 /******************************************************************************
- **	Filename:	blobclass.h
- **	Purpose:	Interface to high level classification and training.
- **	Author:		Dan Johnson
- **	History:	5/29/89, DSJ, Created.
+ ** Filename: blobclass.h
+ ** Purpose: Interface to high level classification and training.
+ ** Author:  Dan Johnson
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,39 +14,26 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-#ifndef   BLOBCLASS_H
-#define   BLOBCLASS_H
+
+#ifndef BLOBCLASS_H
+#define BLOBCLASS_H
 
 /**----------------------------------------------------------------------------
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
-#include "featdefs.h"
-#include "oldlist.h"
-#include "blobs.h"
-
-/*---------------------------------------------------------------------------
-          Macros
-----------------------------------------------------------------------------*/
-/* macros for controlling the display of recognized characters */
-#define EnableCharDisplay()   (DisplayCharacters = TRUE)
-#define DisableCharDisplay()    (DisplayCharacters = FALSE)
-
-/* macros for controlling the display of the entire match list */
-#define EnableMatchDisplay()    (DisplayMatchList = TRUE)
-#define DisableMatchDisplay()   (DisplayMatchList = FALSE)
+#include "strngs.h"
 
 /**----------------------------------------------------------------------------
           Public Function Prototypes
 ----------------------------------------------------------------------------**/
-void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, const STRING& filename,
-               TBLOB * Blob, const DENORM& denorm, const char* BlobText);
+namespace tesseract {
+// Finds the name of the training font and returns it in fontname, by cutting
+// it out based on the expectation that the filename is of the form:
+// /path/to/dir/[lang].[fontname].exp[num]
+// The [lang], [fontname] and [num] fields should not have '.' characters.
+// If the global parameter classify_font_name is set, its value is used instead.
+void ExtractFontName(const STRING& filename, STRING* fontname);
 
-void LearnBlob(const FEATURE_DEFS_STRUCT &FeatureDefs, FILE* File, TBLOB* Blob,
-               const DENORM& denorm, const char* BlobText,
-               const char* FontName);
+}  // namespace tesseract.
 
-/**----------------------------------------------------------------------------
-        Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
-/*parameter used to turn on/off output of recognized chars to the screen */
 #endif

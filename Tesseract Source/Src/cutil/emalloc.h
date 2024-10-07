@@ -1,10 +1,9 @@
 /******************************************************************************
- **	Filename:	emalloc.h
- **	Purpose:	Definition of memory allocation routines.
- **	Author:		Dan Johnson
- **	History:	4/3/89, DSJ, Created.
+ ** Filename: emalloc.h
+ ** Purpose: Definition of memory allocation routines.
+ ** Author:  Dan Johnson
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,30 +14,14 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-#ifndef   EMALLOC_H
-#define   EMALLOC_H
 
-/**----------------------------------------------------------------------------
-          Include Files and Type Defines
-----------------------------------------------------------------------------**/
-#include "host.h"
-#include "callcpp.h"
+#ifndef EMALLOC_H
+#define EMALLOC_H
 
-#define NOTENOUGHMEMORY   2000
-#define ILLEGALMALLOCREQUEST  2001
+void *Emalloc(int Size);
 
-/**----------------------------------------------------------------------------
-          Public Function Prototypes
-----------------------------------------------------------------------------**/
-void *Emalloc(size_t Size);
-
-void *Erealloc(void *ptr, size_t size);
+void *Erealloc(void *ptr, int size);
 
 void Efree(void *ptr);
-
-
-/**----------------------------------------------------------------------------
-        Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
 
 #endif

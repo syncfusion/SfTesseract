@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////
-// File:        UnicityTable.h
+// File:        unicity_table.h
 // Description: a class to uniquify objects, manipulating them using integers
 // ids.
 // Author:      Samuel Charron
@@ -74,7 +74,7 @@ class UnicityTable {
   /// Clear the table, calling the callback function if any.
   /// All the owned Callbacks are also deleted.
   /// If you don't want the Callbacks to be deleted, before calling clear, set
-  /// the callback to NULL.
+  /// the callback to nullptr.
   void clear();
 
   /// This method clear the current object, then, does a shallow copy of
@@ -86,8 +86,8 @@ class UnicityTable {
   /// once. The given callback will be deleted at the end.
   /// Returns false on read/write error.
   bool write(FILE* f, TessResultCallback2<bool, FILE*, T const &>* cb) const;
-  /// swap is used to switch the endianness.
-  bool read(FILE* f, TessResultCallback3<bool, FILE*, T*, bool>* cb, bool swap);
+  bool read(tesseract::TFile* f,
+            TessResultCallback2<bool, tesseract::TFile*, T*>* cb);
 
  private:
   GenericVector<T> table_;
@@ -106,7 +106,7 @@ class UnicityTableEqEq : public UnicityTable<T> {
 
 template <typename T>
 UnicityTable<T>::UnicityTable() :
-  compare_cb_(0) {
+  compare_cb_(nullptr) {
 }
 
 
@@ -194,8 +194,8 @@ bool UnicityTable<T>::write(
 
 template <typename T>
 bool UnicityTable<T>::read(
-    FILE* f, TessResultCallback3<bool, FILE*, T*, bool>* cb, bool swap) {
-  return table_.read(f, cb, swap);
+    tesseract::TFile* f, TessResultCallback2<bool, tesseract::TFile*, T*>* cb) {
+  return table_.read(f, cb);
 }
 
 // This method clear the current object, then, does a shallow copy of

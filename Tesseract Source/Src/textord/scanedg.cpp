@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        scanedg.c  (Formerly scanedge.c)
+ * File:        scanedg.cpp  (Formerly scanedge.c)
  * Description: Raster scanning crack based edge extractor.
- * Author:					Ray Smith
- * Created:					Fri Mar 22 16:11:50 GMT 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,13 +16,16 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          "edgloop.h"
-#include          "scanedg.h"
+#include "scanedg.h"
+
+#include <memory>  // std::unique_ptr
+
+#include "allheaders.h"
+#include "edgloop.h"
 
 #define WHITE_PIX     1          /*thresholded colours */
 #define BLACK_PIX     0
-                                 /*W->B->W */
+// Flips between WHITE_PIX and BLACK_PIX.
 #define FLIP_COLOUR(pix)  (1-(pix))
 
 /**********************************************************************
@@ -32,49 +34,47 @@
  * Extract edges from a PDBLK.
  **********************************************************************/
 
-void block_edges(IMAGE *t_image,       // thresholded image
+void block_edges(Pix *t_pix,           // thresholded image
                  PDBLK *block,         // block in image
                  C_OUTLINE_IT* outline_it) {
-  uinT8 margin;                  // margin colour
-  inT16 x;                       // line coords
-  inT16 y;                       // current line
   ICOORD bleft;                  // bounding box
   ICOORD tright;
-  ICOORD block_bleft;            // bounding box
-  ICOORD block_tright;
-  int xindex;                    // index to pixel
   BLOCK_LINE_IT line_it = block; // line iterator
-  IMAGELINE bwline;              // thresholded line
+
+  int width = pixGetWidth(t_pix);
+  int height = pixGetHeight(t_pix);
+  int wpl = pixGetWpl(t_pix);
                                  // lines in progress
-  CRACKEDGE **ptrline = new CRACKEDGE*[t_image->get_xsize()+1];
-  CRACKEDGE *free_cracks = NULL;
+  std::unique_ptr<CRACKEDGE*[]> ptrline(new CRACKEDGE*[width + 1]);
+  CRACKEDGE *free_cracks = nullptr;
 
   block->bounding_box(bleft, tright);  // block box
-  block_bleft = bleft;
-  block_tright = tright;
-  for (x = tright.x() - bleft.x(); x >= 0; x--)
-    ptrline[x] = NULL;           //no lines in progress
+  ASSERT_HOST(tright.x() <= width);
+  ASSERT_HOST(tright.y() <= height);
+  int block_width = tright.x() - bleft.x();
+  for (int x = block_width; x >= 0; x--)
+    ptrline[x] = nullptr;           //  no lines in progress
 
-  bwline.init(t_image->get_xsize());
+  std::unique_ptr<uint8_t[]> bwline(new uint8_t[width]);
 
-  margin = WHITE_PIX;
+  const uint8_t margin = WHITE_PIX;
 
-  for (y = tright.y() - 1; y >= bleft.y() - 1; y--) {
-    if (y >= block_bleft.y() && y < block_tright.y()) {
-      t_image->get_line(bleft.x(), y, tright.x() - bleft.x(), &bwline, 0);
-      make_margins(block, &line_it, bwline.pixels, margin, bleft.x(),
-                   tright.x(), y);
+  for (int y = tright.y() - 1; y >= bleft.y() - 1; y--) {
+    if (y >= bleft.y() && y < tright.y()) {
+      // Get the binary pixels from the image.
+      l_uint32* line = pixGetData(t_pix) + wpl * (height - 1 - y);
+      for (int x = 0; x < block_width; ++x) {
+        bwline[x] = GET_DATA_BIT(line, x + bleft.x()) ^ 1;
+      }
+      make_margins(block, &line_it, bwline.get(), margin, bleft.x(), tright.x(), y);
     } else {
-      x = tright.x() - bleft.x();
-      for (xindex = 0; xindex < x; xindex++)
-        bwline.pixels[xindex] = margin;
+      memset(bwline.get(), margin, block_width * sizeof(bwline[0]));
     }
-    line_edges(bleft.x(), y, tright.x() - bleft.x(),
-               margin, bwline.pixels, ptrline, &free_cracks, outline_it);
+    line_edges(bleft.x(), y, block_width,
+               margin, bwline.get(), ptrline.get(), &free_cracks, outline_it);
   }
 
   free_crackedges(free_cracks);  // really free them
-  delete[] ptrline;
 }
 
 
@@ -87,24 +87,23 @@ void block_edges(IMAGE *t_image,       // thresholded image
 void make_margins(                         //get a line
                   PDBLK *block,            //block in image
                   BLOCK_LINE_IT *line_it,  //for old style
-                  uinT8 *pixels,           //pixels to strip
-                  uinT8 margin,            //white-out pixel
-                  inT16 left,              //block edges
-                  inT16 right,
-                  inT16 y                  //line coord
+                  uint8_t *pixels,           //pixels to strip
+                  uint8_t margin,            //white-out pixel
+                  int16_t left,              //block edges
+                  int16_t right,
+                  int16_t y                  //line coord
                  ) {
-  PB_LINE_IT *lines;
-  ICOORDELT_LIST *segments;      //bits of a line
   ICOORDELT_IT seg_it;
-  inT32 start;                   //of segment
-  inT16 xext;                    //of segment
+  int32_t start;                   //of segment
+  int16_t xext;                    //of segment
   int xindex;                    //index to pixel
 
-  if (block->poly_block () != NULL) {
-    lines = new PB_LINE_IT (block->poly_block ());
-    segments = lines->get_line (y);
+  if (block->poly_block () != nullptr) {
+    std::unique_ptr<PB_LINE_IT> lines(new PB_LINE_IT (block->poly_block ()));
+    const std::unique_ptr</*non-const*/ ICOORDELT_LIST> segments(
+        lines->get_line(y));
     if (!segments->empty ()) {
-      seg_it.set_to_list (segments);
+      seg_it.set_to_list(segments.get());
       seg_it.mark_cycle_pt ();
       start = seg_it.data ()->x ();
       xext = seg_it.data ()->y ();
@@ -123,8 +122,6 @@ void make_margins(                         //get a line
       for (xindex = left; xindex < right; xindex++)
         pixels[xindex - left] = margin;
     }
-    delete segments;
-    delete lines;
   }
   else {
     start = line_it->get_line (y, xext);
@@ -135,39 +132,6 @@ void make_margins(                         //get a line
   }
 }
 
-
-/**********************************************************************
- * whiteout_block
- *
- * Extract edges from a PDBLK.
- **********************************************************************/
-
-void whiteout_block(                 //clean it
-                    IMAGE *t_image,  //threshold image
-                    PDBLK *block     //block in image
-                   ) {
-  inT16 x;                       //line coords
-  inT16 y;                       //current line
-  inT16 xext;                    //line width
-  int xindex;                    //index to pixel
-  uinT8 *dest;                   //destination pixel
-  TBOX block_box;                 //bounding box
-  BLOCK_LINE_IT line_it = block; //line iterator
-  IMAGELINE bwline;              //thresholded line
-
-  block_box = block->bounding_box ();
-  for (y = block_box.bottom (); y < block_box.top (); y++) {
-                                 //find line limits
-    x = line_it.get_line (y, xext);
-    t_image->get_line (x, y, xext, &bwline, 0);
-    dest = bwline.pixels;        //destination pixel
-    for (xindex = 0; xindex < xext; xindex++)
-      *dest++ = 1;
-    t_image->put_line (x, y, xext, &bwline, 0);
-  }
-}
-
-
 /**********************************************************************
  * line_edges
  *
@@ -175,29 +139,28 @@ void whiteout_block(                 //clean it
  * When edges close into loops, send them for approximation.
  **********************************************************************/
 
-void line_edges(inT16 x,                         // coord of line start
-                inT16 y,                         // coord of line
-                inT16 xext,                      // width of line
-                uinT8 uppercolour,               // start of prev line
-                uinT8 * bwpos,                   // thresholded line
+void line_edges(int16_t x,                         // coord of line start
+                int16_t y,                         // coord of line
+                int16_t xext,                      // width of line
+                uint8_t uppercolour,               // start of prev line
+                uint8_t * bwpos,                   // thresholded line
                 CRACKEDGE ** prevline,           // edges in progress
                 CRACKEDGE **free_cracks,
                 C_OUTLINE_IT* outline_it) {
   CrackPos pos = {free_cracks, x, y };
   int xmax;                      // max x coord
-  int colour;                    // of current pixel
   int prevcolour;                // of previous pixel
   CRACKEDGE *current;            // current h edge
   CRACKEDGE *newcurrent;         // new h edge
 
   xmax = x + xext;               // max allowable coord
   prevcolour = uppercolour;      // forced plain margin
-  current = NULL;                // nothing yet
+  current = nullptr;                // nothing yet
 
                                  // do each pixel
   for (; pos.x < xmax; pos.x++, prevline++) {
-    colour = *bwpos++;           // current pixel
-    if (*prevline != NULL) {
+    const int colour = *bwpos++; // current pixel
+    if (*prevline != nullptr) {
                                  // changed above
                                  // change colour
       uppercolour = FLIP_COLOUR(uppercolour);
@@ -205,19 +168,19 @@ void line_edges(inT16 x,                         // coord of line start
         if (colour == uppercolour) {
                                  // finish a line
           join_edges(current, *prevline, free_cracks, outline_it);
-          current = NULL;        // no edge now
+          current = nullptr;        // no edge now
         } else {
                                  // new horiz edge
           current = h_edge(uppercolour - colour, *prevline, &pos);
         }
-        *prevline = NULL;        // no change this time
+        *prevline = nullptr;        // no change this time
       } else {
         if (colour == uppercolour)
           *prevline = v_edge(colour - prevcolour, *prevline, &pos);
                                  // 8 vs 4 connection
         else if (colour == WHITE_PIX) {
           join_edges(current, *prevline, free_cracks, outline_it);
-          current = h_edge(uppercolour - colour, NULL, &pos);
+          current = h_edge(uppercolour - colour, nullptr, &pos);
           *prevline = v_edge(colour - prevcolour, current, &pos);
         } else {
           newcurrent = h_edge(uppercolour - colour, *prevline, &pos);
@@ -234,19 +197,19 @@ void line_edges(inT16 x,                         // coord of line start
       if (colour != uppercolour)
         current = h_edge(uppercolour - colour, current, &pos);
       else
-        current = NULL;          // no edge now
+        current = nullptr;          // no edge now
     }
   }
-  if (current != NULL) {
+  if (current != nullptr) {
                                  // out of block
-    if (*prevline != NULL) {     // got one to join to?
+    if (*prevline != nullptr) {     // got one to join to?
       join_edges(current, *prevline, free_cracks, outline_it);
-      *prevline = NULL;          // tidy now
+      *prevline = nullptr;          // tidy now
     } else {
                                  // fake vertical
       *prevline = v_edge(FLIP_COLOUR(prevcolour)-prevcolour, current, &pos);
     }
-  } else if (*prevline != NULL) {
+  } else if (*prevline != nullptr) {
                                  //continue fake
     *prevline = v_edge(FLIP_COLOUR(prevcolour)-prevcolour, *prevline, &pos);
   }
@@ -264,7 +227,7 @@ CRACKEDGE *h_edge(int sign,                       // sign of edge
                   CrackPos* pos) {
   CRACKEDGE *newpt;              // return value
 
-  if (*pos->free_cracks != NULL) {
+  if (*pos->free_cracks != nullptr) {
     newpt = *pos->free_cracks;
     *pos->free_cracks = newpt->next;  // get one fast
   } else {
@@ -283,7 +246,7 @@ CRACKEDGE *h_edge(int sign,                       // sign of edge
     newpt->stepdir = 2;
   }
 
-  if (join == NULL) {
+  if (join == nullptr) {
     newpt->next = newpt;         // ptrs to other ends
     newpt->prev = newpt;
   } else {
@@ -315,7 +278,7 @@ CRACKEDGE *v_edge(int sign,                       // sign of edge
                   CrackPos* pos) {
   CRACKEDGE *newpt;              // return value
 
-  if (*pos->free_cracks != NULL) {
+  if (*pos->free_cracks != nullptr) {
     newpt = *pos->free_cracks;
     *pos->free_cracks = newpt->next;  // get one fast
   } else {
@@ -334,7 +297,7 @@ CRACKEDGE *v_edge(int sign,                       // sign of edge
     newpt->stepdir = 1;
   }
 
-  if (join == NULL) {
+  if (join == nullptr) {
     newpt->next = newpt;         //ptrs to other ends
     newpt->prev = newpt;
   } else {
@@ -369,7 +332,7 @@ void join_edges(CRACKEDGE *edge1,  // edges to join
   if (edge1->pos.x() + edge1->stepx != edge2->pos.x()
   || edge1->pos.y() + edge1->stepy != edge2->pos.y()) {
     CRACKEDGE *tempedge = edge1;
-    edge1 = edge2;               // swap araound
+    edge1 = edge2;  // swap around
     edge2 = tempedge;
   }
 
@@ -399,7 +362,7 @@ void free_crackedges(CRACKEDGE *start) {
   CRACKEDGE *current;            // current edge to free
   CRACKEDGE *next;               // next one to free
 
-  for (current = start; current != NULL; current = next) {
+  for (current = start; current != nullptr; current = next) {
     next = current->next;
     delete current;              // delete them all
   }

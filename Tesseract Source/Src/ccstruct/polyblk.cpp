@@ -1,8 +1,6 @@
 /**********************************************************************
- * File:        polyblk.c  (Formerly poly_block.c)
+ * File:        polyblk.cpp  (Formerly poly_block.c)
  * Description: Polygonal blocks
- * Author:					Sheelagh Lloyd?
- * Created:
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,22 +15,20 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include <ctype.h>
-#include <math.h>
-#include <stdio.h>
-#include "elst.h"
 #include "polyblk.h"
+#include "elst.h"
+#include <cctype>
+#include <cinttypes>  // PRId32
+#include <cmath>
+#include <cstdio>
+#include <memory>     // std::unique_ptr
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
 
-#include "hpddef.h"     // must be last (handpd.dll)
-
-#define PBLOCK_LABEL_SIZE 150
-#define INTERSECTING MAX_INT16
+#define INTERSECTING INT16_MAX
 
 int lessthan(const void *first, const void *second);
 
@@ -47,14 +43,14 @@ POLY_BLOCK::POLY_BLOCK(ICOORDELT_LIST *points, PolyBlockType t) {
 }
 
 // Initialize from box coordinates.
-POLY_BLOCK::POLY_BLOCK(const TBOX& box, PolyBlockType t) {
+POLY_BLOCK::POLY_BLOCK(const TBOX& tbox, PolyBlockType t) {
   vertices.clear();
   ICOORDELT_IT v = &vertices;
   v.move_to_first();
-  v.add_to_end(new ICOORDELT(box.left(), box.top()));
-  v.add_to_end(new ICOORDELT(box.left(), box.bottom()));
-  v.add_to_end(new ICOORDELT(box.right(), box.bottom()));
-  v.add_to_end(new ICOORDELT(box.right(), box.top()));
+  v.add_to_end(new ICOORDELT(tbox.left(), tbox.top()));
+  v.add_to_end(new ICOORDELT(tbox.left(), tbox.bottom()));
+  v.add_to_end(new ICOORDELT(tbox.right(), tbox.bottom()));
+  v.add_to_end(new ICOORDELT(tbox.right(), tbox.top()));
   compute_bb();
   type = t;
 }
@@ -101,12 +97,12 @@ void POLY_BLOCK::compute_bb() {  //constructor
  * @param point point to wind around
  */
 
-inT16 POLY_BLOCK::winding_number(const ICOORD &point) {
-  inT16 count;                   //winding count
+int16_t POLY_BLOCK::winding_number(const ICOORD &point) {
+  int16_t count;                   //winding count
   ICOORD pt;                     //current point
   ICOORD vec;                    //point to current point
   ICOORD vvec;                   //current point to next point
-  inT32 cross;                   //cross product
+  int32_t cross;                   //cross product
   ICOORDELT_IT it = &vertices;   //iterator
 
   count = 0;
@@ -140,7 +136,7 @@ inT16 POLY_BLOCK::winding_number(const ICOORD &point) {
 
 /// @return true if other is inside this.
 bool POLY_BLOCK::contains(POLY_BLOCK *other) {
-  inT16 count;                   // winding count
+  int16_t count;                   // winding count
   ICOORDELT_IT it = &vertices;   // iterator
   ICOORD vertex;
 
@@ -195,8 +191,8 @@ void POLY_BLOCK::rotate(FCOORD rotation) {
     pos.set_x (pt->x ());
     pos.set_y (pt->y ());
     pos.rotate (rotation);
-    pt->set_x ((inT16) (floor (pos.x () + 0.5)));
-    pt->set_y ((inT16) (floor (pos.y () + 0.5)));
+    pt->set_x(static_cast<int16_t>(floor(pos.x() + 0.5)));
+    pt->set_y(static_cast<int16_t>(floor(pos.y() + 0.5)));
     pts.forward ();
   }
   while (!pts.at_first ());
@@ -245,7 +241,7 @@ void POLY_BLOCK::move(ICOORD shift) {
 
 
 #ifndef GRAPHICS_DISABLED
-void POLY_BLOCK::plot(ScrollView* window, inT32 num) {
+void POLY_BLOCK::plot(ScrollView* window, int32_t num) {
   ICOORDELT_IT v = &vertices;
 
   window->Pen(ColorForPolyBlockType(type));
@@ -255,11 +251,11 @@ void POLY_BLOCK::plot(ScrollView* window, inT32 num) {
   if (num > 0) {
     window->TextAttributes("Times", 80, false, false, false);
     char temp_buff[34];
-    #ifdef __UNIX__
-    sprintf(temp_buff, INT32FORMAT, num);
-    #else
-    ltoa (num, temp_buff, 10);
-    #endif
+#if !defined(_WIN32) || defined(__MINGW32__)
+    snprintf(temp_buff, sizeof(temp_buff), "%" PRId32, num);
+#else
+    _ltoa(num, temp_buff, 10);
+#endif
     window->Text(v.data ()->x (), v.data ()->y (), temp_buff);
   }
 
@@ -273,10 +269,9 @@ void POLY_BLOCK::plot(ScrollView* window, inT32 num) {
 
 
 void POLY_BLOCK::fill(ScrollView* window, ScrollView::Color colour) {
-  inT16 y;
-  inT16 width;
+  int16_t y;
+  int16_t width;
   PB_LINE_IT *lines;
-  ICOORDELT_LIST *segments;
   ICOORDELT_IT s_it;
 
   lines = new PB_LINE_IT (this);
@@ -284,26 +279,29 @@ void POLY_BLOCK::fill(ScrollView* window, ScrollView::Color colour) {
 
   for (y = this->bounding_box ()->bottom ();
   y <= this->bounding_box ()->top (); y++) {
-    segments = lines->get_line (y);
+    const std::unique_ptr</*non-const*/ ICOORDELT_LIST> segments(
+        lines->get_line(y));
     if (!segments->empty ()) {
-      s_it.set_to_list (segments);
+      s_it.set_to_list(segments.get());
       for (s_it.mark_cycle_pt (); !s_it.cycled_list (); s_it.forward ()) {
         // Note different use of ICOORDELT, x coord is x coord of pixel
         // at the start of line segment, y coord is length of line segment
         // Last pixel is start pixel + length.
         width = s_it.data ()->y ();
         window->SetCursor(s_it.data ()->x (), y);
-        window->DrawTo(s_it.data ()->x () + (float) width, y);
+        window->DrawTo(s_it.data()->x() + static_cast<float>(width), y);
       }
     }
   }
+
+  delete lines;
 }
 #endif
 
 
 /// @return true if the polygons of other and this overlap.
 bool POLY_BLOCK::overlap(POLY_BLOCK *other) {
-  inT16 count;                   // winding count
+  int16_t count;                   // winding count
   ICOORDELT_IT it = &vertices;   // iterator
   ICOORD vertex;
 
@@ -341,13 +339,11 @@ bool POLY_BLOCK::overlap(POLY_BLOCK *other) {
 }
 
 
-ICOORDELT_LIST *PB_LINE_IT::get_line(inT16 y) {
+ICOORDELT_LIST *PB_LINE_IT::get_line(int16_t y) {
   ICOORDELT_IT v, r;
   ICOORDELT_LIST *result;
   ICOORDELT *x, *current, *previous;
-  float fy, fx;
-
-  fy = (float) (y + 0.5);
+  float fy = y + 0.5f;
   result = new ICOORDELT_LIST ();
   r.set_to_list (result);
   v.set_to_list (block->points ());
@@ -357,11 +353,10 @@ ICOORDELT_LIST *PB_LINE_IT::get_line(inT16 y) {
     || ((v.data_relative (-1)->y () <= y) && (v.data ()->y () > y))) {
       previous = v.data_relative (-1);
       current = v.data ();
-      fx = (float) (0.5 + previous->x () +
-        (current->x () - previous->x ()) * (fy -
-        previous->y ()) /
-        (current->y () - previous->y ()));
-      x = new ICOORDELT ((inT16) fx, 0);
+      float fx = 0.5f + previous->x() +
+        (current->x() - previous->x()) * (fy - previous->y()) /
+        (current->y() - previous->y());
+      x = new ICOORDELT(static_cast<int16_t>(fx), 0);
       r.add_to_end (x);
     }
   }
@@ -382,8 +377,8 @@ ICOORDELT_LIST *PB_LINE_IT::get_line(inT16 y) {
 
 
 int lessthan(const void *first, const void *second) {
-  ICOORDELT *p1 = (*(ICOORDELT **) first);
-  ICOORDELT *p2 = (*(ICOORDELT **) second);
+  const ICOORDELT *p1 = *reinterpret_cast<const ICOORDELT* const*>(first);
+  const ICOORDELT *p2 = *reinterpret_cast<const ICOORDELT* const*>(second);
 
   if (p1->x () < p2->x ())
     return (-1);
@@ -393,7 +388,7 @@ int lessthan(const void *first, const void *second) {
     return (0);
 }
 
-
+#ifndef GRAPHICS_DISABLED
 /// Returns a color to draw the given type.
 ScrollView::Color POLY_BLOCK::ColorForPolyBlockType(PolyBlockType type) {
   // Keep kPBColors in sync with PolyBlockType.
@@ -414,8 +409,9 @@ ScrollView::Color POLY_BLOCK::ColorForPolyBlockType(PolyBlockType type) {
     ScrollView::DARK_GREEN,   // Vertical Line.
     ScrollView::GREY          // Lies outside of any column.
   };
-  if (type >= 0 && type < PT_COUNT) {
+  if (type < PT_COUNT) {
     return kPBColors[type];
   }
   return ScrollView::WHITE;
 }
+#endif  // GRAPHICS_DISABLED

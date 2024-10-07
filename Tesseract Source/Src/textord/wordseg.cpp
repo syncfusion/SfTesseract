@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        wordseg.cpp  (Formerly wspace.c)
  * Description: Code to segment the blobs into words.
- * Author:		Ray Smith
- * Created:		Fri Oct 16 11:32:28 BST 1992
+ * Author:      Ray Smith
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,37 +16,29 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
-#include          "stderr.h"
-#include          "blobbox.h"
-#include          "statistc.h"
-#include          "drawtord.h"
-#include          "makerow.h"
-#include          "pitsync1.h"
-#include          "tovars.h"
-#include          "topitch.h"
-#include          "cjkpitch.h"
-#include          "textord.h"
-#include          "fpchop.h"
-#include          "wordseg.h"
+#include "blobbox.h"
+#include "statistc.h"
+#include "drawtord.h"
+#include "makerow.h"
+#include "pitsync1.h"
+#include "tovars.h"
+#include "topitch.h"
+#include "cjkpitch.h"
+#include "textord.h"
+#include "fpchop.h"
+#include "wordseg.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
 #include "config_auto.h"
 #endif
 
-#define EXTERN
-
-EXTERN BOOL_VAR(textord_fp_chopping, TRUE, "Do fixed pitch chopping");
-EXTERN BOOL_VAR(textord_force_make_prop_words, FALSE,
+BOOL_VAR(textord_fp_chopping, true, "Do fixed pitch chopping");
+BOOL_VAR(textord_force_make_prop_words, false,
                 "Force proportional word segmentation on all rows");
-EXTERN BOOL_VAR(textord_chopper_test, FALSE,
+BOOL_VAR(textord_chopper_test, false,
                 "Chopper is being tested.");
 
-#define FIXED_WIDTH_MULTIPLE  5
 #define BLOCK_STATS_CLUSTERS  10
 
 
@@ -72,25 +63,25 @@ void make_single_word(bool one_blob, TO_ROW_LIST *rows, ROW_LIST* real_rows) {
     for (;!box_it.empty(); box_it.forward()) {
       BLOBNBOX* bblob= box_it.extract();
       if (bblob->joined_to_prev() || (one_blob && !cblob_it.empty())) {
-        if (bblob->cblob() != NULL) {
+        if (bblob->cblob() != nullptr) {
           C_OUTLINE_IT cout_it(cblob_it.data()->out_list());
           cout_it.move_to_last();
           cout_it.add_list_after(bblob->cblob()->out_list());
           delete bblob->cblob();
         }
       } else {
-        if (bblob->cblob() != NULL)
+        if (bblob->cblob() != nullptr)
           cblob_it.add_after_then_move(bblob->cblob());
       }
       delete bblob;
     }
     // Convert the TO_ROW to a ROW.
-    ROW* real_row = new ROW(row, static_cast<inT16>(row->kern_size),
-                            static_cast<inT16>(row->space_size));
+    ROW* real_row = new ROW(row, static_cast<int16_t>(row->kern_size),
+                            static_cast<int16_t>(row->space_size));
     WERD_IT word_it(real_row->word_list());
-    WERD* word = new WERD(&cblobs, 0, NULL);
-    word->set_flag(W_BOL, TRUE);
-    word->set_flag(W_EOL, TRUE);
+    WERD* word = new WERD(&cblobs, 0, nullptr);
+    word->set_flag(W_BOL, true);
+    word->set_flag(W_EOL, true);
     word->set_flag(W_DONT_CHOP, one_blob);
     word_it.add_after_then_move(word);
     row_it.add_after_then_move(real_row);
@@ -114,7 +105,7 @@ void make_words(tesseract::Textord *textord,
     compute_fixed_pitch_cjk(page_tr, port_blocks);
   } else {
     compute_fixed_pitch(page_tr, port_blocks, gradient, FCOORD(0.0f, -1.0f),
-                        !(BOOL8) textord_test_landscape);
+                        !bool(textord_test_landscape));
   }
   textord->to_spacing(page_tr, port_blocks);
   block_it.set_to_list(port_blocks);
@@ -133,33 +124,26 @@ void make_words(tesseract::Textord *textord,
  */
 
 void set_row_spaces(                  //find space sizes
-                    TO_BLOCK *block,  //block to do
-                    FCOORD rotation,  //for drawing
-                    BOOL8 testing_on  //correct orientation
-                   ) {
-  inT32 maxwidth;                //of widest space
+        TO_BLOCK* block,  //block to do
+        FCOORD rotation,  //for drawing
+        bool testing_on  //correct orientation
+) {
   TO_ROW *row;                   //current row
   TO_ROW_IT row_it = block->get_rows ();
 
   if (row_it.empty ())
     return;                      //empty block
-  maxwidth = (inT32) ceil (block->xheight * textord_words_maxspace);
   for (row_it.mark_cycle_pt (); !row_it.cycled_list (); row_it.forward ()) {
     row = row_it.data ();
     if (row->fixed_pitch == 0) {
-      //                      if (!textord_test_mode
-      //                      && row_words(block,row,maxwidth,rotation,testing_on)==0
-      //                      || textord_test_mode
-      //                      && row_words2(block,row,maxwidth,rotation,testing_on)==0)
-      //                      {
       row->min_space =
-        (inT32) ceil (row->pr_space -
+        static_cast<int32_t>(ceil (row->pr_space -
         (row->pr_space -
-        row->pr_nonsp) * textord_words_definite_spread);
+        row->pr_nonsp) * textord_words_definite_spread));
       row->max_nonspace =
-        (inT32) floor (row->pr_nonsp +
+        static_cast<int32_t>(floor (row->pr_nonsp +
         (row->pr_space -
-        row->pr_nonsp) * textord_words_definite_spread);
+        row->pr_nonsp) * textord_words_definite_spread));
       if (testing_on && textord_show_initial_words) {
         tprintf ("Assigning defaults %d non, %d space to row at %g\n",
           row->max_nonspace, row->min_space, row->intercept ());
@@ -167,11 +151,10 @@ void set_row_spaces(                  //find space sizes
       row->space_threshold = (row->max_nonspace + row->min_space) / 2;
       row->space_size = row->pr_space;
       row->kern_size = row->pr_nonsp;
-      //                      }
     }
 #ifndef GRAPHICS_DISABLED
     if (textord_show_initial_words && testing_on) {
-      plot_word_decisions (to_win, (inT16) row->fixed_pitch, row);
+      plot_word_decisions (to_win, static_cast<int16_t>(row->fixed_pitch), row);
     }
 #endif
   }
@@ -184,21 +167,19 @@ void set_row_spaces(                  //find space sizes
  * Compute the max nonspace and min space for the row.
  */
 
-inT32 row_words(                  //compute space size
-                TO_BLOCK *block,  //block it came from
-                TO_ROW *row,      //row to operate on
-                inT32 maxwidth,   //max expected space size
-                FCOORD rotation,  //for drawing
-                BOOL8 testing_on  //for debug
-               ) {
-  BOOL8 testing_row;             //contains testpt
-  BOOL8 prev_valid;              //if decent size
-  BOOL8 this_valid;              //current blob big enough
-  inT32 prev_x;                  //end of prev blob
-  inT32 min_gap;                 //min interesting gap
-  inT32 cluster_count;           //no of clusters
-  inT32 gap_index;               //which cluster
-  inT32 smooth_factor;           //for smoothing stats
+int32_t row_words(                  //compute space size
+        TO_BLOCK* block,  //block it came from
+        TO_ROW* row,      //row to operate on
+        int32_t maxwidth,   //max expected space size
+        FCOORD rotation,  //for drawing
+        bool testing_on  //for debug
+) {
+  bool testing_row;             //contains testpt
+  bool prev_valid;              //if decent size
+  int32_t prev_x;                //end of prev blob
+  int32_t cluster_count;         //no of clusters
+  int32_t gap_index;             //which cluster
+  int32_t smooth_factor;         //for smoothing stats
   BLOBNBOX *blob;                //current blob
   float lower, upper;            //clustering parameters
   float gaps[3];                 //gap clusers
@@ -211,33 +192,29 @@ inT32 row_words(                  //compute space size
 
   testpt = ICOORD (textord_test_x, textord_test_y);
   smooth_factor =
-    (inT32) (block->xheight * textord_wordstats_smooth_factor + 1.5);
+    static_cast<int32_t>(block->xheight * textord_wordstats_smooth_factor + 1.5);
   //      if (testing_on)
   //              tprintf("Row smooth factor=%d\n",smooth_factor);
-  prev_valid = FALSE;
-  prev_x = -MAX_INT32;
-  testing_row = FALSE;
+  prev_valid = false;
+  prev_x = -INT32_MAX;
+  testing_row = false;
   for (blob_it.mark_cycle_pt (); !blob_it.cycled_list (); blob_it.forward ()) {
     blob = blob_it.data ();
     blob_box = blob->bounding_box ();
     if (blob_box.contains (testpt))
-      testing_row = TRUE;
+      testing_row = true;
     gap_stats.add (blob_box.width (), 1);
   }
-  min_gap = (inT32) floor (gap_stats.ile (textord_words_width_ile));
   gap_stats.clear ();
   for (blob_it.mark_cycle_pt (); !blob_it.cycled_list (); blob_it.forward ()) {
     blob = blob_it.data ();
     if (!blob->joined_to_prev ()) {
       blob_box = blob->bounding_box ();
-      //                      this_valid=blob_box.width()>=min_gap;
-      this_valid = TRUE;
-      if (this_valid && prev_valid
-      && blob_box.left () - prev_x < maxwidth) {
+      if (prev_valid && blob_box.left () - prev_x < maxwidth) {
         gap_stats.add (blob_box.left () - prev_x, 1);
       }
+      prev_valid = true;
       prev_x = blob_box.right ();
-      prev_valid = this_valid;
     }
   }
   if (gap_stats.get_total () == 0) {
@@ -328,9 +305,9 @@ inT32 row_words(                  //compute space size
     }
   }
   row->min_space =
-    (inT32) ceil (upper - (upper - lower) * textord_words_definite_spread);
+    static_cast<int32_t>(ceil (upper - (upper - lower) * textord_words_definite_spread));
   row->max_nonspace =
-    (inT32) floor (lower + (upper - lower) * textord_words_definite_spread);
+    static_cast<int32_t>(floor (lower + (upper - lower) * textord_words_definite_spread));
   row->space_threshold = (row->max_nonspace + row->min_space) / 2;
   row->space_size = upper;
   row->kern_size = lower;
@@ -357,24 +334,23 @@ inT32 row_words(                  //compute space size
  * Compute the max nonspace and min space for the row.
  */
 
-inT32 row_words2(                  //compute space size
-                 TO_BLOCK *block,  //block it came from
-                 TO_ROW *row,      //row to operate on
-                 inT32 maxwidth,   //max expected space size
-                 FCOORD rotation,  //for drawing
-                 BOOL8 testing_on  //for debug
-                ) {
-  BOOL8 testing_row;             //contains testpt
-  BOOL8 prev_valid;              //if decent size
-  BOOL8 this_valid;              //current blob big enough
-  inT32 prev_x;                  //end of prev blob
-  inT32 min_width;               //min interesting width
-  inT32 valid_count;             //good gaps
-  inT32 total_count;             //total gaps
-  inT32 cluster_count;           //no of clusters
-  inT32 prev_count;              //previous cluster_count
-  inT32 gap_index;               //which cluster
-  inT32 smooth_factor;           //for smoothing stats
+int32_t row_words2(                  //compute space size
+        TO_BLOCK* block,  //block it came from
+        TO_ROW* row,      //row to operate on
+        int32_t maxwidth,   //max expected space size
+        FCOORD rotation,  //for drawing
+        bool testing_on  //for debug
+) {
+  bool prev_valid;              //if decent size
+  bool this_valid;              //current blob big enough
+  int32_t prev_x;                  //end of prev blob
+  int32_t min_width;               //min interesting width
+  int32_t valid_count;             //good gaps
+  int32_t total_count;             //total gaps
+  int32_t cluster_count;           //no of clusters
+  int32_t prev_count;              //previous cluster_count
+  int32_t gap_index;               //which cluster
+  int32_t smooth_factor;           //for smoothing stats
   BLOBNBOX *blob;                //current blob
   float lower, upper;            //clustering parameters
   ICOORD testpt;
@@ -389,21 +365,20 @@ inT32 row_words2(                  //compute space size
 
   testpt = ICOORD (textord_test_x, textord_test_y);
   smooth_factor =
-    (inT32) (block->xheight * textord_wordstats_smooth_factor + 1.5);
+    static_cast<int32_t>(block->xheight * textord_wordstats_smooth_factor + 1.5);
   //      if (testing_on)
   //              tprintf("Row smooth factor=%d\n",smooth_factor);
-  prev_valid = FALSE;
-  prev_x = -MAX_INT16;
-  testing_row = FALSE;
+  prev_valid = false;
+  prev_x = -INT16_MAX;
+  const bool testing_row = false;
                                  //min blob size
-  min_width = (inT32) block->pr_space;
+  min_width = static_cast<int32_t>(block->pr_space);
   total_count = 0;
   for (blob_it.mark_cycle_pt (); !blob_it.cycled_list (); blob_it.forward ()) {
     blob = blob_it.data ();
     if (!blob->joined_to_prev ()) {
       blob_box = blob->bounding_box ();
       this_valid = blob_box.width () >= min_width;
-      this_valid = TRUE;
       if (this_valid && prev_valid
       && blob_box.left () - prev_x < maxwidth) {
         gap_stats.add (blob_box.left () - prev_x, 1);
@@ -416,7 +391,7 @@ inT32 row_words2(                  //compute space size
   valid_count = gap_stats.get_total ();
   if (valid_count < total_count * textord_words_minlarge) {
     gap_stats.clear ();
-    prev_x = -MAX_INT16;
+    prev_x = -INT16_MAX;
     for (blob_it.mark_cycle_pt (); !blob_it.cycled_list ();
     blob_it.forward ()) {
       blob = blob_it.data ();
@@ -484,9 +459,9 @@ inT32 row_words2(                  //compute space size
     upper = block->pr_space;
   }
   row->min_space =
-    (inT32) ceil (upper - (upper - lower) * textord_words_definite_spread);
+    static_cast<int32_t>(ceil (upper - (upper - lower) * textord_words_definite_spread));
   row->max_nonspace =
-    (inT32) floor (lower + (upper - lower) * textord_words_definite_spread);
+    static_cast<int32_t>(floor (lower + (upper - lower) * textord_words_definite_spread));
   row->space_threshold = (row->max_nonspace + row->min_space) / 2;
   row->space_size = upper;
   row->kern_size = lower;
@@ -520,7 +495,7 @@ void make_real_words(
                     ) {
   TO_ROW *row;                   //current row
   TO_ROW_IT row_it = block->get_rows ();
-  ROW *real_row = NULL;          //output row
+  ROW *real_row = nullptr;          //output row
   ROW_IT real_row_it = block->block->row_list ();
 
   if (row_it.empty ())
@@ -535,11 +510,11 @@ void make_real_words(
       // For non-space delimited language like CJK, fixed pitch chop always
       // leave the entire line as one word.  We can force consistent chopping
       // with force_make_prop_words flag.
-      POLY_BLOCK* pb = block->block->poly_block();
+      POLY_BLOCK* pb = block->block->pdblk.poly_block();
       if (textord_chopper_test) {
         real_row = textord->make_blob_words (row, rotation);
       } else if (textord_force_make_prop_words ||
-                 (pb != NULL && !pb->IsText()) ||
+                 (pb != nullptr && !pb->IsText()) ||
                  row->pitch_decision == PITCH_DEF_PROP ||
                  row->pitch_decision == PITCH_CORR_PROP) {
         real_row = textord->make_prop_words (row, rotation);
@@ -547,17 +522,17 @@ void make_real_words(
                  row->pitch_decision == PITCH_CORR_FIXED) {
         real_row = fixed_pitch_words (row, rotation);
       } else {
-        ASSERT_HOST(FALSE);
+        ASSERT_HOST(false);
       }
     }
-    if (real_row != NULL) {
+    if (real_row != nullptr) {
                                  //put row in block
       real_row_it.add_after_then_move (real_row);
     }
   }
-  block->block->set_stats (block->fixed_pitch == 0, (inT16) block->kern_size,
-    (inT16) block->space_size,
-    (inT16) block->fixed_pitch);
+  block->block->set_stats (block->fixed_pitch == 0, static_cast<int16_t>(block->kern_size),
+    static_cast<int16_t>(block->space_size),
+    static_cast<int16_t>(block->fixed_pitch));
   block->block->check_pitch ();
 }
 
@@ -573,26 +548,19 @@ ROW *make_rep_words(                 //make a row
                     TO_ROW *row,     //row to convert
                     TO_BLOCK *block  //block it lives in
                    ) {
-  inT32 xstarts[2];              //ends of row
   ROW *real_row;                 //output row
   TBOX word_box;                  //bounding box
-  double coeffs[3];              //spline
                                  //iterator
   WERD_IT word_it = &row->rep_words;
 
   if (word_it.empty ())
-    return NULL;
+    return nullptr;
   word_box = word_it.data ()->bounding_box ();
   for (word_it.mark_cycle_pt (); !word_it.cycled_list (); word_it.forward ())
     word_box += word_it.data ()->bounding_box ();
-  xstarts[0] = word_box.left ();
-  xstarts[1] = word_box.right ();
-  coeffs[0] = 0;
-  coeffs[1] = row->line_m ();
-  coeffs[2] = row->line_c ();
   row->xheight = block->xheight;
   real_row = new ROW(row,
-    (inT16) block->kern_size, (inT16) block->space_size);
+    static_cast<int16_t>(block->kern_size), static_cast<int16_t>(block->space_size));
   word_it.set_to_list (real_row->word_list ());
                                  //put words in row
   word_it.add_list_after (&row->rep_words);
@@ -609,21 +577,21 @@ ROW *make_rep_words(                 //make a row
  */
 
 WERD *make_real_word(BLOBNBOX_IT *box_it,  //iterator
-                     inT32 blobcount,      //no of blobs to use
-                     BOOL8 bol,            //start of line
-                     uinT8 blanks          //no of blanks
+                     int32_t blobcount,      //no of blobs to use
+                     bool bol,            //start of line
+                     uint8_t blanks          //no of blanks
                     ) {
   C_OUTLINE_IT cout_it;
   C_BLOB_LIST cblobs;
   C_BLOB_IT cblob_it = &cblobs;
   WERD *word;                    // new word
   BLOBNBOX *bblob;               // current blob
-  inT32 blobindex;               // in row
+  int32_t blobindex;               // in row
 
   for (blobindex = 0; blobindex < blobcount; blobindex++) {
     bblob = box_it->extract();
     if (bblob->joined_to_prev()) {
-      if (bblob->cblob() != NULL) {
+      if (bblob->cblob() != nullptr) {
         cout_it.set_to_list(cblob_it.data()->out_list());
         cout_it.move_to_last();
         cout_it.add_list_after(bblob->cblob()->out_list());
@@ -631,7 +599,7 @@ WERD *make_real_word(BLOBNBOX_IT *box_it,  //iterator
       }
     }
     else {
-      if (bblob->cblob() != NULL)
+      if (bblob->cblob() != nullptr)
         cblob_it.add_after_then_move(bblob->cblob());
     }
     delete bblob;
@@ -641,12 +609,12 @@ WERD *make_real_word(BLOBNBOX_IT *box_it,  //iterator
   if (blanks < 1)
     blanks = 1;
 
-  word = new WERD(&cblobs, blanks, NULL);
+  word = new WERD(&cblobs, blanks, nullptr);
 
   if (bol)
-    word->set_flag(W_BOL, TRUE);
+    word->set_flag(W_BOL, true);
   if (box_it->at_first())
-    word->set_flag(W_EOL, TRUE);  // at end of line
+    word->set_flag(W_EOL, true);  // at end of line
 
   return word;
 }

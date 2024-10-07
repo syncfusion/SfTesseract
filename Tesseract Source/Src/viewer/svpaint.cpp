@@ -1,6 +1,15 @@
 // Copyright 2007 Google Inc. All Rights Reserved.
 //
 // Author: Joern Wanke
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 //
 // Simple drawing program to illustrate ScrollView capabilities.
 //
@@ -11,21 +20,26 @@
 // - A LMB click either draws point-to-point, point or text.
 // - A LMB dragging either draws a line, a rectangle or ellipse.
 
-#include "scrollview.h"
-#include "svmnode.h"
-#include <stdlib.h>
-#include <iostream>
+// Include automatically generated configuration file if running autoconf.
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
+#endif
 
 #ifndef GRAPHICS_DISABLED
+#include "scrollview.h"
+#include "svmnode.h"
+#include <cstdlib>
+#include <iostream>
+
 // The current color values we use, initially white (== ScrollView::WHITE).
-int rgb[3] = { 255, 255, 255 };
+static int rgb[3] = { 255, 255, 255 };
 
 class SVPaint : public SVEventHandler {
  public:
-   SVPaint(const char* server_name);
+   explicit SVPaint(const char* server_name);
 // This is the main event handling function that we need to overwrite, defined
 // in SVEventHandler.
-   void Notify(const SVEvent* sv_event);
+   void Notify(const SVEvent* sv_event) override;
  private:
 // The Handler take care of the SVET_POPUP, SVET_MENU, SVET_CLICK and
 // SVET_SELECTION events.
@@ -52,7 +66,7 @@ class SVPaint : public SVEventHandler {
 
 // Build a sample popup menu.
 SVMenuNode* SVPaint::BuildPopupMenu() {
-  SVMenuNode* root = new SVMenuNode();  // Empty root node
+  auto* root = new SVMenuNode();  // Empty root node
   // Initial color is white, so we  all values to 255.
   root->AddChild("R",                   // Shown caption.
                   1,                    // assoc. command_id.
@@ -65,12 +79,12 @@ SVMenuNode* SVPaint::BuildPopupMenu() {
 
 // Build a sample menu bar.
 SVMenuNode* SVPaint::BuildMenuBar() {
-  SVMenuNode* root = new SVMenuNode();  // Empty root node
+  auto* root = new SVMenuNode();  // Empty root node
 
   // Create some submenus and add them to the root.
   SVMenuNode* click = root->AddChild("Clicking");
   SVMenuNode* drag = root->AddChild("Dragging");
-  
+
   // Put some nodes into the submenus.
   click->AddChild("Point to Point Drawing",  // Caption.
                   1);                       // command_id.
@@ -95,8 +109,8 @@ void SVPaint::PopupHandler(const SVEvent* sv_event) {
 // In our case, we change either the click_mode_ (commands 1-3)
 // or the drag_mode_ (commands 4-6).
 void SVPaint::MenuBarHandler(const SVEvent* sv_event) {
-  if ((sv_event->command_id > 0) && (sv_event->command_id < 4)) { 
-  click_mode_ = sv_event->command_id;	
+  if ((sv_event->command_id > 0) && (sv_event->command_id < 4)) {
+  click_mode_ = sv_event->command_id;
   has_start_point_ = false;
   } else { drag_mode_ = sv_event->command_id; }
 }
@@ -109,7 +123,7 @@ void SVPaint::ClickHandler(const SVEvent* sv_event) {
   case 1: //Point to Point
     if (has_start_point_) { window_->DrawTo(sv_event->x, sv_event->y);
     } else {
-        has_start_point_ = true; 
+        has_start_point_ = true;
         window_->SetCursor(sv_event->x, sv_event->y);
     }
     break;
@@ -121,7 +135,7 @@ void SVPaint::ClickHandler(const SVEvent* sv_event) {
     // finally delete the input pointer.
     char* p = window_->ShowInputDialog("Text:");
     window_->Text(sv_event->x, sv_event->y, p);
-    delete p;
+    delete [] p;
     break;
   }
 }
@@ -133,7 +147,7 @@ void SVPaint::SelectionHandler(const SVEvent* sv_event) {
   switch (drag_mode_) {
   //FIXME inversed x_size, y_size
     case 4: //Line
-      window_->Line(sv_event->x, sv_event->y, 
+      window_->Line(sv_event->x, sv_event->y,
                     sv_event->x - sv_event->x_size,
                     sv_event->y - sv_event->y_size);
       break;
@@ -153,11 +167,11 @@ void SVPaint::SelectionHandler(const SVEvent* sv_event) {
 // The event handling function from ScrollView which we have to overwrite.
 // We handle CLICK, SELECTION, MENU and POPUP and throw away all other events.
 void SVPaint::Notify(const SVEvent* sv_event) {
-  if (sv_event->type == SVET_CLICK) { ClickHandler(sv_event); }  
+  if (sv_event->type == SVET_CLICK) { ClickHandler(sv_event); }
   else if (sv_event->type == SVET_SELECTION) { SelectionHandler(sv_event); }
   else if (sv_event->type == SVET_MENU) { MenuBarHandler(sv_event); }
   else if (sv_event->type == SVET_POPUP) { PopupHandler(sv_event); }
-  else {} //throw other events away
+  //throw other events away
 }
 
 // Builds a new window, initializes the variables and event handler and builds
@@ -166,9 +180,9 @@ SVPaint::SVPaint(const char *server_name) {
   window_ = new ScrollView("ScrollView Paint Example",  // window caption
                             0, 0,                       // x,y window position
                             500, 500,                   // window size
-  		                    500, 500,                   // canvas size
+                            500, 500,                   // canvas size
                             false,      // whether the Y axis is inversed.
-                                        // this is included due to legacy 
+                                        // this is included due to legacy
                                         // reasons for tesseract and enables
                                         // us to have (0,0) as the LOWER left
                                         // of the coordinate system.
@@ -183,7 +197,7 @@ SVPaint::SVPaint(const char *server_name) {
   // this is a menu bar.
   SVMenuNode* popup_menu = BuildPopupMenu();
   popup_menu->BuildMenu(window_,false);
-	
+
   SVMenuNode* bar_menu = BuildMenuBar();
   bar_menu->BuildMenu(window_,true);
 
@@ -212,10 +226,10 @@ SVPaint::SVPaint(const char *server_name) {
 }
 
 // If a parameter is given, we try to connect to the given server.
-// This enables us to test the remote capabilites of ScrollView.
+// This enables us to test the remote capabilities of ScrollView.
 int main(int argc, char** argv) {
-	const char* server_name;
-	if (argc > 1) { server_name = argv[1]; } else { server_name = "localhost"; }
-	SVPaint svp(server_name);
+  const char* server_name;
+  if (argc > 1) { server_name = argv[1]; } else { server_name = "localhost"; }
+  SVPaint svp(server_name);
 }
 #endif  // GRAPHICS_DISABLED

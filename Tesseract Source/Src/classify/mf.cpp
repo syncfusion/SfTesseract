@@ -1,10 +1,10 @@
 /******************************************************************************
- **	Filename:    mf.c
- **	Purpose:     Micro-feature interface to flexible feature extractor.
- **	Author:      Dan Johnson
- **	History:     Thu May 24 09:08:38 1990, DSJ, Created.
+ ** Filename:    mf.c
+ ** Purpose:     Micro-feature interface to flexible feature extractor.
+ ** Author:      Dan Johnson
+ ** History:     Thu May 24 09:08:38 1990, DSJ, Created.
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,52 +15,47 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
           Include Files and Type Defines
-----------------------------------------------------------------------------**/
+----------------------------------------------------------------------------*/
 #include "mf.h"
 
 #include "featdefs.h"
 #include "mfdefs.h"
 #include "mfx.h"
 
-#include <math.h>
+#include <cmath>
 
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
         Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
-/**----------------------------------------------------------------------------
+----------------------------------------------------------------------------*/
+/*----------------------------------------------------------------------------
               Private Code
-----------------------------------------------------------------------------**/
-/*---------------------------------------------------------------------------*/
-FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm) {
-/*
- **	Parameters:
- **		Blob		blob to extract micro-features from
- **		denorm  control parameter to feature extractor.
- **	Globals: none
- **	Operation: Call the old micro-feature extractor and then copy
- **		the features into the new format.  Then deallocate the
- **		old micro-features.
- **	Return: Micro-features for Blob.
- **	Exceptions: none
- **	History: Wed May 23 18:06:38 1990, DSJ, Created.
+----------------------------------------------------------------------------*/
+/**
+ * Call the old micro-feature extractor and then copy
+ * the features into the new format.  Then deallocate the
+ * old micro-features.
+ * @param Blob  blob to extract micro-features from
+ * @param cn_denorm  control parameter to feature extractor.
+ * @return Micro-features for Blob.
  */
+FEATURE_SET ExtractMicros(TBLOB* Blob, const DENORM& cn_denorm) {
   int NumFeatures;
   MICROFEATURES Features, OldFeatures;
   FEATURE_SET FeatureSet;
   FEATURE Feature;
   MICROFEATURE OldFeature;
 
-  OldFeatures = (MICROFEATURES)BlobMicroFeatures(Blob, denorm);
-  if (OldFeatures == NULL)
-    return NULL;
+  OldFeatures = BlobMicroFeatures(Blob, cn_denorm);
+  if (OldFeatures == nullptr)
+    return nullptr;
   NumFeatures = count (OldFeatures);
   FeatureSet = NewFeatureSet (NumFeatures);
 
   Features = OldFeatures;
   iterate(Features) {
-    OldFeature = (MICROFEATURE) first_node (Features);
+    OldFeature = reinterpret_cast<MICROFEATURE>first_node (Features);
     Feature = NewFeature (&MicroFeatureDesc);
     Feature->Params[MFDirection] = OldFeature[ORIENTATION];
     Feature->Params[MFXPosition] = OldFeature[XPOSITION];
@@ -75,13 +70,12 @@ FEATURE_SET ExtractMicros(TBLOB *Blob, const DENORM& denorm) {
     // Assert that feature parameters are well defined.
     int i;
     for (i = 0; i < Feature->Type->NumParams; i++) {
-      assert (!isnan(Feature->Params[i]));
+      ASSERT_HOST(!std::isnan(Feature->Params[i]));
     }
 #endif
 
     AddFeature(FeatureSet, Feature);
   }
   FreeMicroFeatures(OldFeatures);
-  return (FeatureSet);
-
+  return FeatureSet;
 }                                /* ExtractMicros */

@@ -25,9 +25,8 @@
 // A SVMenuNode can both be used in the context_ of popup menus as well as
 // menu bars.
 
-#include <string.h>
-#include <iostream>
 #include <cstring>
+#include <iostream>
 
 #include "svmnode.h"
 
@@ -44,39 +43,34 @@
 // be added to this or one of the submenus.
 SVMenuNode::SVMenuNode() {
   cmd_event_ = -1;
-  text_ = NULL;
-  child_ = NULL;
-  next_ = NULL;
-  parent_ = NULL;
+  child_ = nullptr;
+  next_ = nullptr;
+  parent_ = nullptr;
   toggle_value_ = false;
   is_check_box_entry_ = false;
-  value_ = NULL;
-  description_ = NULL;
 }
 
 SVMenuNode::~SVMenuNode() {
-  delete[] text_;
-//  delete[] description_;
 }
 
 // Create a new sub menu node with just a caption.  This is used to create
 // nodes which act as parent nodes to other nodes (e.g. submenus).
 SVMenuNode* SVMenuNode::AddChild(const char* txt) {
-  SVMenuNode* s = new SVMenuNode(-1, txt, false, false, NULL, NULL);
+  auto* s = new SVMenuNode(-1, txt, false, false, nullptr, nullptr);
   this->AddChild(s);
   return s;
 }
 
 // Create a "normal" menu node which is associated with a command event.
 void SVMenuNode::AddChild(const char* txt, int command_event) {
-  this->AddChild(new SVMenuNode(command_event, txt, false, false, NULL, NULL));
+  this->AddChild(new SVMenuNode(command_event, txt, false, false, nullptr, nullptr));
 }
 
 // Create a menu node with an associated value (which might be changed
 // through the gui).
 void SVMenuNode::AddChild(const char* txt, int command_event,
                           const char* val) {
-  this->AddChild(new SVMenuNode(command_event, txt, false, false, val, NULL));
+  this->AddChild(new SVMenuNode(command_event, txt, false, false, val, nullptr));
 }
 
 // Create a menu node with an associated value and description_.
@@ -87,26 +81,20 @@ void SVMenuNode::AddChild(const char* txt, int command_event, const char* val,
 
 // Create a flag menu node.
 void SVMenuNode::AddChild(const char* txt, int command_event, int tv) {
-  this->AddChild(new SVMenuNode(command_event, txt, tv, true, NULL, NULL));
+  this->AddChild(new SVMenuNode(command_event, txt, tv, true, nullptr, nullptr));
 }
 
 // Convenience function called from the different constructors to initialize
 // the different values of the menu node.
 SVMenuNode::SVMenuNode(int command_event, const char* txt,
                        int tv, bool check_box_entry, const char* val,
-                       const char* desc) {
+                       const char* desc)
+  : text_(txt), value_(val), description_(desc) {
   cmd_event_ = command_event;
 
-  text_ = new char[strlen(txt) + 1];
-  strncpy(text_, txt, strlen(txt));
-  text_[strlen(txt)] = '\0';
-
-  value_ = val;
-  description_ = desc;
-
-  child_ = NULL;
-  next_ = NULL;
-  parent_ = NULL;
+  child_ = nullptr;
+  next_ = nullptr;
+  parent_ = nullptr;
   toggle_value_ = tv != 0;
   is_check_box_entry_ = check_box_entry;
 }
@@ -115,11 +103,11 @@ SVMenuNode::SVMenuNode(int command_event, const char* txt,
 void SVMenuNode::AddChild(SVMenuNode* svmn) {
   svmn->parent_ = this;
   // No children yet.
-  if (child_ == NULL) {
+  if (child_ == nullptr) {
     child_ = svmn;
   } else {
     SVMenuNode* cur = child_;
-    while (cur->next_ != NULL) { cur = cur->next_; }
+    while (cur->next_ != nullptr) { cur = cur->next_; }
     cur->next_ = svmn;
   }
 }
@@ -130,17 +118,26 @@ void SVMenuNode::AddChild(SVMenuNode* svmn) {
 // built which gets shown by right clicking on the window.
 // Deletes itself afterwards.
 void SVMenuNode::BuildMenu(ScrollView* sv, bool menu_bar) {
-  if ((parent_ != NULL) && (menu_bar)) {
+  if ((parent_ != nullptr) && (menu_bar)) {
     if (is_check_box_entry_) {
-      sv->MenuItem(parent_->text_, text_, cmd_event_, toggle_value_);
-    } else { sv->MenuItem(parent_->text_, text_, cmd_event_); }
-  } else if ((parent_ != NULL) && (!menu_bar)) {
-    if (description_ != NULL) { sv->PopupItem(parent_->text_, text_,
-                                             cmd_event_, value_, description_);
-      } else { sv->PopupItem(parent_->text_, text_); }
+      sv->MenuItem(parent_->text_.string(), text_.string(), cmd_event_,
+                   toggle_value_);
+    } else {
+      sv->MenuItem(parent_->text_.string(), text_.string(), cmd_event_); }
+  } else if ((parent_ != nullptr) && (!menu_bar)) {
+    if (description_.length() > 0) {
+      sv->PopupItem(parent_->text_.string(), text_.string(), cmd_event_,
+                    value_.string(), description_.string());
+      } else {
+      sv->PopupItem(parent_->text_.string(), text_.string());
+    }
   }
-  if (child_ != NULL) { child_->BuildMenu(sv, menu_bar); delete child_; }
-  if (next_ != NULL) { next_->BuildMenu(sv, menu_bar); delete next_; }
+  if (child_ != nullptr) {
+    child_->BuildMenu(sv, menu_bar); delete child_;
+  }
+  if (next_ != nullptr) {
+    next_->BuildMenu(sv, menu_bar); delete next_;
+  }
 }
 
 #endif  // GRAPHICS_DISABLED

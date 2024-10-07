@@ -1,5 +1,5 @@
 ///////////////////////////////////////////////////////////////////////
-// File:        colpartitionrid.h
+// File:        colpartitiongrid.h
 // Description: Class collecting code that acts on a BBGrid of ColPartitions.
 // Author:      Ray Smith
 // Created:     Mon Oct 05 08:42:01 PDT 2009
@@ -17,8 +17,8 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_COLPARTITIONGRID_H__
-#define TESSERACT_TEXTORD_COLPARTITIONGRID_H__
+#ifndef TESSERACT_TEXTORD_COLPARTITIONGRID_H_
+#define TESSERACT_TEXTORD_COLPARTITIONGRID_H_
 
 #include "bbgrid.h"
 #include "colpartition.h"
@@ -34,18 +34,18 @@ class ColPartitionGrid : public BBGrid<ColPartition,
                                        ColPartition_CLIST,
                                        ColPartition_C_IT> {
  public:
-  ColPartitionGrid();
+  ColPartitionGrid() = default;
   ColPartitionGrid(int gridsize, const ICOORD& bleft, const ICOORD& tright);
 
-  virtual ~ColPartitionGrid();
+  ~ColPartitionGrid() override = default;
 
   // Handles a click event in a display window.
-  void HandleClick(int x, int y);
+  void HandleClick(int x, int y) override;
 
   // Merges ColPartitions in the grid that look like they belong in the same
   // textline.
   // For all partitions in the grid, calls the box_cb permanent callback
-  // to compute the search box, seaches the box, and if a candidate is found,
+  // to compute the search box, searches the box, and if a candidate is found,
   // calls the confirm_cb to check any more rules. If the confirm_cb returns
   // true, then the partitions are merged.
   // Both callbacks are deleted before returning.
@@ -63,16 +63,21 @@ class ColPartitionGrid : public BBGrid<ColPartition,
                                      const ColPartition*>* confirm_cb,
                  ColPartition* part);
 
+  // Computes and returns the total overlap of all partitions in the grid.
+  // If overlap_grid is non-null, it is filled with a grid that holds empty
+  // partitions representing the union of all overlapped partitions.
+  int ComputeTotalOverlap(ColPartitionGrid** overlap_grid);
+
   // Finds all the ColPartitions in the grid that overlap with the given
   // box and returns them SortByBoxLeft(ed) and uniqued in the given list.
-  // Any partition equal to not_this (may be NULL) is excluded.
+  // Any partition equal to not_this (may be nullptr) is excluded.
   void FindOverlappingPartitions(const TBOX& box, const ColPartition* not_this,
                                  ColPartition_CLIST* parts);
 
   // Finds and returns the best candidate ColPartition to merge with part,
   // selected from the candidates list, based on the minimum increase in
   // pairwise overlap among all the partitions overlapped by the combined box.
-  // If overlap_increase is not NULL then it returns the increase in overlap
+  // If overlap_increase is not nullptr then it returns the increase in overlap
   // that would result from the merge.
   // See colpartitiongrid.cpp for a diagram.
   ColPartition* BestMergeCandidate(
@@ -101,11 +106,6 @@ class ColPartitionGrid : public BBGrid<ColPartition,
   bool GridSmoothNeighbours(BlobTextFlowType source_type, Pix* nontext_map,
                             const TBOX& im_box, const FCOORD& rerotation);
 
-  // Compute the mean RGB of the light and dark pixels in each ColPartition
-  // and also the rms error in the linearity of color.
-  void ComputePartitionColors(Pix* scaled_color, int scaled_factor,
-                              const FCOORD& rerotation);
-
   // Reflects the grid and its colpartitions in the y-axis, assuming that
   // all blob boxes have already been done.
   void ReflectInYAxis();
@@ -113,6 +113,12 @@ class ColPartitionGrid : public BBGrid<ColPartition,
   // Rotates the grid and its colpartitions by the given angle, assuming that
   // all blob boxes have already been done.
   void Deskew(const FCOORD& deskew);
+
+  // Transforms the grid of partitions to the output blocks, putting each
+  // partition into a separate block. We don't really care about the order,
+  // as we just want to get as much text as possible without trying to organize
+  // it into proper blocks or columns.
+  void ExtractPartitionsAsBlocks(BLOCK_LIST* blocks, TO_BLOCK_LIST* to_blocks);
 
   // Sets the left and right tabs of the partitions in the grid.
   void SetTabStops(TabFind* tabgrid);
@@ -126,7 +132,7 @@ class ColPartitionGrid : public BBGrid<ColPartition,
   // Makes a single ColPartitionSet consisting of a single ColPartition that
   // represents the total horizontal extent of the significant content on the
   // page. Used for the single column setting in place of automatic detection.
-  // Returns NULL if the page is empty of significant content.
+  // Returns nullptr if the page is empty of significant content.
   ColPartitionSet* MakeSingleColumnSet(WidthCallback* cb);
 
   // Mark the BLOBNBOXes in each partition as being owned by that partition.
@@ -159,6 +165,10 @@ class ColPartitionGrid : public BBGrid<ColPartition,
   // all the blobs in them.
   void DeleteUnknownParts(TO_BLOCK* block);
 
+  // Deletes all the partitions in the grid that are NOT of flow type
+  // BTFT_LEADER.
+  void DeleteNonLeaderParts();
+
   // Finds and marks text partitions that represent figure captions.
   void FindFigureCaptions();
 
@@ -185,7 +195,7 @@ class ColPartitionGrid : public BBGrid<ColPartition,
                            bool debug, ColPartition_CLIST* candidates);
 
   // Smoothes the region type/flow type of the given part by looking at local
-  // neigbours and the given image mask. Searches a padded rectangle with the
+  // neighbours and the given image mask. Searches a padded rectangle with the
   // padding truncated on one size of the part's box in turn for each side,
   // using the result (if any) that has the least distance to all neighbours
   // that contribute to the decision. This biases in favor of rectangular
@@ -231,7 +241,7 @@ class ColPartitionGrid : public BBGrid<ColPartition,
   // neighbours that vertically overlap significantly.
   void FindPartitionMargins(ColPartitionSet* columns, ColPartition* part);
 
-  // Starting at x, and going in the specified direction, upto x_limit, finds
+  // Starting at x, and going in the specified direction, up to x_limit, finds
   // the margin for the given y range by searching sideways,
   // and ignoring not_this.
   int FindMargin(int x, bool right_to_left, int x_limit,
@@ -240,4 +250,4 @@ class ColPartitionGrid : public BBGrid<ColPartition,
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_TEXTORD_COLPARTITIONGRID_H__
+#endif  // TESSERACT_TEXTORD_COLPARTITIONGRID_H_

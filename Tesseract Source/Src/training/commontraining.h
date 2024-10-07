@@ -11,34 +11,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef TESSERACT_TRAINING_COMMONTRAINING_H__
-#define TESSERACT_TRAINING_COMMONTRAINING_H__
+#ifndef TESSERACT_TRAINING_COMMONTRAINING_H_
+#define TESSERACT_TRAINING_COMMONTRAINING_H_
 
-#include "oldlist.h"
-#include "cluster.h"
-#include "intproto.h"
-#include "featdefs.h"
-
-// Macros to merge tesseract params with command-line flags.
-#ifdef USE_STD_NAMESPACE
-#include "params.h"
-#  define INT_PARAM_FLAG(name, val, comment) \
-    INT_VAR(FLAGS_##name, val, comment)
-#  define DECLARE_INT_PARAM_FLAG(name) extern INT_VAR_H(FLAGS_##name, 0, "")
-#  define STRING_PARAM_FLAG(name, val, comment) \
-    STRING_VAR(FLAGS_##name, val, comment)
-#  define DECLARE_STRING_PARAM_FLAG(name) \
-    extern STRING_VAR_H(FLAGS_##name, "", "")
-#  define c_str string
-#else
-#include "base/commandlineflags.h"
-#  define INT_PARAM_FLAG(name, val, comment) \
-    DEFINE_int32(name, val, comment)
-#  define DECLARE_INT_PARAM_FLAG(name) DECLARE_int32(name)
-#  define STRING_PARAM_FLAG(name, val, comment) \
-    DEFINE_string(name, val, comment)
-#  define DECLARE_STRING_PARAM_FLAG(name) DECLARE_string(name)
+#ifdef HAVE_CONFIG_H
+#include "config_auto.h"
 #endif
+
+#include "baseapi.h"
+
+#ifdef DISABLED_LEGACY_ENGINE
+
+#include "tprintf.h"
+#include "commandlineflags.h"
+
+
+void ParseArguments(int* argc, char*** argv);
+
+
+namespace tesseract {
+
+// Check whether the shared tesseract library is the right one.
+// This function must be inline because otherwise it would be part of
+// the shared library, so it could not compare the versions.
+static inline void CheckSharedLibraryVersion()
+{
+#ifdef HAVE_CONFIG_H
+  if (!!strcmp(TESSERACT_VERSION_STR, TessBaseAPI::Version())) {
+    tprintf("ERROR: shared library version mismatch (was %s, expected %s\n"
+            "Did you use a wrong shared tesseract library?\n",
+            TessBaseAPI::Version(), TESSERACT_VERSION_STR);
+    exit(1);
+  }
+#endif
+}
+
+}  // namespace tesseract
+
+
+#else
+
+#include "cluster.h"
+#include "commandlineflags.h"
+#include "featdefs.h"
+#include "intproto.h"
+#include "oldlist.h"
 
 namespace tesseract {
 class Classify;
@@ -73,7 +90,7 @@ typedef struct
   int   NumMerged[MAX_NUM_PROTOS];
   CLASS_TYPE Class;
 }MERGE_CLASS_NODE;
-typedef MERGE_CLASS_NODE* MERGE_CLASS;
+using MERGE_CLASS = MERGE_CLASS_NODE*;
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -82,6 +99,22 @@ typedef MERGE_CLASS_NODE* MERGE_CLASS;
 void ParseArguments(int* argc, char*** argv);
 
 namespace tesseract {
+
+// Check whether the shared tesseract library is the right one.
+// This function must be inline because otherwise it would be part of
+// the shared library, so it could not compare the versions.
+static inline void CheckSharedLibraryVersion()
+{
+#ifdef HAVE_CONFIG_H
+  if (!!strcmp(TESSERACT_VERSION_STR, TessBaseAPI::Version())) {
+    tprintf("ERROR: shared library version mismatch (was %s, expected %s\n"
+            "Did you use a wrong shared tesseract library?\n",
+            TessBaseAPI::Version(), TESSERACT_VERSION_STR);
+    exit(1);
+  }
+#endif
+}
+
 // Helper loads shape table from the given file.
 ShapeTable* LoadShapeTable(const STRING& file_prefix);
 // Helper to write the shape_table.
@@ -89,7 +122,7 @@ void WriteShapeTable(const STRING& file_prefix, const ShapeTable& shape_table);
 
 // Creates a MasterTraininer and loads the training data into it:
 // Initializes feature_defs and IntegerFX.
-// Loads the shape_table if shape_table != NULL.
+// Loads the shape_table if shape_table != nullptr.
 // Loads initial unicharset from -U command-line option.
 // If FLAGS_input_trainer is set, loads the majority of data from there, else:
 //   Loads font info from -F option.
@@ -98,7 +131,7 @@ void WriteShapeTable(const STRING& file_prefix, const ShapeTable& shape_table);
 //   Deletes outliers and computes canonical samples.
 //   If FLAGS_output_trainer is set, saves the trainer for future use.
 // Computes canonical and cloud features.
-// If shape_table is not NULL, but failed to load, make a fake flat one,
+// If shape_table is not nullptr, but failed to load, make a fake flat one,
 // as shape clustering was not run.
 MasterTrainer* LoadTrainingData(int argc, const char* const * argv,
                                 bool replication,
@@ -142,8 +175,8 @@ CLUSTERER *SetUpForClustering(
 
 LIST RemoveInsignificantProtos(
     LIST        ProtoList,
-    BOOL8       KeepSigProtos,
-    BOOL8       KeepInsigProtos,
+    bool        KeepSigProtos,
+    bool        KeepInsigProtos,
     int         N);
 
 void CleanUpUnusedData(
@@ -181,9 +214,12 @@ void AddToNormProtosList(
 
 int NumberOfProtos(
     LIST        ProtoList,
-    BOOL8       CountSigProtos,
-    BOOL8       CountInsigProtos);
+    bool        CountSigProtos,
+    bool        CountInsigProtos);
 
 
 void allocNormProtos();
-#endif  // TESSERACT_TRAINING_COMMONTRAINING_H__
+
+#endif  // def DISABLED_LEGACY_ENGINE
+
+#endif  // TESSERACT_TRAINING_COMMONTRAINING_H_

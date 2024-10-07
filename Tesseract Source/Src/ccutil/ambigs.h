@@ -3,7 +3,6 @@
 // Description: Constants, flags, functions for dealing with
 //              ambiguities (training and recognition).
 // Author:      Daria Antonova
-// Created:     Mon Aug 23 11:26:43 PDT 2008
 //
 // (C) Copyright 2008, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +20,8 @@
 #ifndef TESSERACT_CCUTIL_AMBIGS_H_
 #define TESSERACT_CCUTIL_AMBIGS_H_
 
+#if !defined(DISABLED_LEGACY_ENGINE)
+
 #include "elst.h"
 #include "tprintf.h"
 #include "unichar.h"
@@ -31,15 +32,7 @@
 
 namespace tesseract {
 
-typedef GenericVector<UNICHAR_ID> UnicharIdVector;
-
-static const int kUnigramAmbigsBufferSize = 1000;
-static const char kAmbigNgramSeparator[] = { ' ', '\0' };
-static const char kAmbigDelimiters[] = "\t ";
-static const char kIllegalMsg[] =
-  "Illegal ambiguity specification on line %d\n";
-static const char kIllegalUnicharMsg[] =
-  "Illegal unichar %s in ambiguity specification\n";
+using UnicharIdVector = GenericVector<UNICHAR_ID>;
 
 enum AmbigType {
   NOT_AMBIG,        // the ngram pair is not ambiguous
@@ -59,17 +52,18 @@ class UnicharIdArrayUtils {
   // less than length of array2, if any array1[i] is less than array2[i].
   // Returns 0 if the arrays are equal, 1 otherwise.
   // The function assumes that the arrays are terminated by INVALID_UNICHAR_ID.
-  static inline int compare(const UNICHAR_ID array1[],
-                            const UNICHAR_ID array2[]) {
-    const UNICHAR_ID *ptr1 = array1;
-    const UNICHAR_ID *ptr2 = array2;
-    while (*ptr1 != INVALID_UNICHAR_ID && *ptr2 != INVALID_UNICHAR_ID) {
-      if (*ptr1 != *ptr2) return *ptr1 < *ptr2 ? -1 : 1;
-      ++ptr1;
-      ++ptr2;
+  static inline int compare(const UNICHAR_ID *ptr1, const UNICHAR_ID *ptr2) {
+    for (;;) {
+      const UNICHAR_ID val1 = *ptr1++;
+      const UNICHAR_ID val2 = *ptr2++;
+      if (val1 != val2) {
+        if (val1 == INVALID_UNICHAR_ID) return -1;
+        if (val2 == INVALID_UNICHAR_ID) return 1;
+        if (val1 < val2) return -1;
+        return 1;
+      }
+      if (val1 == INVALID_UNICHAR_ID) return 0;
     }
-    if (*ptr1 == INVALID_UNICHAR_ID && *ptr2 == INVALID_UNICHAR_ID) return 0;
-    return *ptr1 == INVALID_UNICHAR_ID ? -1 : 1;
   }
 
   // Look uid in the vector of uids.  If found, the index of the matched
@@ -113,17 +107,18 @@ class UnicharIdArrayUtils {
 class AmbigSpec : public ELIST_LINK {
  public:
   AmbigSpec();
-  ~AmbigSpec() {}
+  ~AmbigSpec() = default;
 
   // Comparator function for sorting AmbigSpec_LISTs. The lists will
   // be sorted by their wrong_ngram arrays. Example of wrong_ngram vectors
   // in a a sorted AmbigSpec_LIST: [9 1 3], [9 3 4], [9 8], [9, 8 1].
   static int compare_ambig_specs(const void *spec1, const void *spec2) {
-    const AmbigSpec *s1 =
-      *reinterpret_cast<const AmbigSpec * const *>(spec1);
-    const AmbigSpec *s2 =
-      *reinterpret_cast<const AmbigSpec * const *>(spec2);
-    return UnicharIdArrayUtils::compare(s1->wrong_ngram, s2->wrong_ngram);
+    const AmbigSpec *s1 = *static_cast<const AmbigSpec *const *>(spec1);
+    const AmbigSpec *s2 = *static_cast<const AmbigSpec *const *>(spec2);
+    int result = UnicharIdArrayUtils::compare(s1->wrong_ngram, s2->wrong_ngram);
+    if (result != 0) return result;
+    return UnicharIdArrayUtils::compare(s1->correct_fragments,
+                                        s2->correct_fragments);
   }
 
   UNICHAR_ID wrong_ngram[MAX_AMBIG_SIZE + 1];
@@ -132,15 +127,15 @@ class AmbigSpec : public ELIST_LINK {
   AmbigType type;
   int wrong_ngram_size;
 };
-ELISTIZEH(AmbigSpec);
+ELISTIZEH(AmbigSpec)
 
 // AMBIG_TABLE[i] stores a set of ambiguities whose
 // wrong ngram starts with unichar id i.
-typedef GenericVector<AmbigSpec_LIST *> UnicharAmbigsVector;
+using UnicharAmbigsVector = GenericVector<AmbigSpec_LIST *>;
 
 class UnicharAmbigs {
  public:
-  UnicharAmbigs() {}
+  UnicharAmbigs() = default;
   ~UnicharAmbigs() {
     replace_ambigs_.delete_data_pointers();
     dang_ambigs_.delete_data_pointers();
@@ -149,6 +144,13 @@ class UnicharAmbigs {
 
   const UnicharAmbigsVector &dang_ambigs() const { return dang_ambigs_; }
   const UnicharAmbigsVector &replace_ambigs() const { return replace_ambigs_; }
+
+  // Initializes the ambigs by adding a nullptr pointer to each table.
+  void InitUnicharAmbigs(const UNICHARSET& unicharset,
+                         bool use_ambigs_for_adaption);
+
+  // Loads the universal ambigs that are useful for any language.
+  void LoadUniversal(const UNICHARSET& encoder_set, UNICHARSET* unicharset);
 
   // Fills in two ambiguity tables (replaceable and dangerous) with information
   // read from the ambigs file. An ambiguity table is an array of lists.
@@ -160,13 +162,16 @@ class UnicharAmbigs {
   // one_to_one_definite_ambigs_. This vector is also indexed by the class id
   // of the wrong part of the ambiguity and each entry contains a vector of
   // unichar ids that are ambiguous to it.
-  void LoadUnicharAmbigs(FILE *ambigs_file, inT64 end_offset, int debug_level,
+  // encoder_set is used to encode the ambiguity strings, undisturbed by new
+  // unichar_ids that may be created by adding the ambigs.
+  void LoadUnicharAmbigs(const UNICHARSET& encoder_set,
+                         TFile *ambigs_file, int debug_level,
                          bool use_ambigs_for_adaption, UNICHARSET *unicharset);
 
   // Returns definite 1-1 ambigs for the given unichar id.
   inline const UnicharIdVector *OneToOneDefiniteAmbigs(
       UNICHAR_ID unichar_id) const {
-    if (one_to_one_definite_ambigs_.empty()) return NULL;
+    if (one_to_one_definite_ambigs_.empty()) return nullptr;
     return one_to_one_definite_ambigs_[unichar_id];
   }
 
@@ -177,7 +182,7 @@ class UnicharAmbigs {
   // m will return a pointer to a vector with unichar ids of r,n,i.
   inline const UnicharIdVector *AmbigsForAdaption(
       UNICHAR_ID unichar_id) const {
-    if (ambigs_for_adaption_.empty()) return NULL;
+    if (ambigs_for_adaption_.empty()) return nullptr;
     return ambigs_for_adaption_[unichar_id];
   }
 
@@ -186,22 +191,23 @@ class UnicharAmbigs {
   // some ambiguity pair).
   inline const UnicharIdVector *ReverseAmbigsForAdaption(
       UNICHAR_ID unichar_id) const {
-    if (reverse_ambigs_for_adaption_.empty()) return NULL;
+    if (reverse_ambigs_for_adaption_.empty()) return nullptr;
     return reverse_ambigs_for_adaption_[unichar_id];
   }
 
  private:
-
   bool ParseAmbiguityLine(int line_num, int version, int debug_level,
                           const UNICHARSET &unicharset, char *buffer,
-                          int *TestAmbigPartSize, UNICHAR_ID *TestUnicharIds,
-                          int *ReplacementAmbigPartSize,
-                          char *ReplacementString, int *type);
-  void InsertIntoTable(UnicharAmbigsVector &table,
-                       int TestAmbigPartSize, UNICHAR_ID *TestUnicharIds,
-                       int ReplacementAmbigPartSize,
-                       const char *ReplacementString, int type,
+                          int *test_ambig_part_size,
+                          UNICHAR_ID *test_unichar_ids,
+                          int *replacement_ambig_part_size,
+                          char *replacement_string, int *type);
+  bool InsertIntoTable(UnicharAmbigsVector &table,
+                       int test_ambig_part_size, UNICHAR_ID *test_unichar_ids,
+                       int replacement_ambig_part_size,
+                       const char *replacement_string, int type,
                        AmbigSpec *ambig_spec, UNICHARSET *unicharset);
+
   UnicharAmbigsVector dang_ambigs_;
   UnicharAmbigsVector replace_ambigs_;
   GenericVector<UnicharIdVector *> one_to_one_definite_ambigs_;
@@ -210,5 +216,7 @@ class UnicharAmbigs {
 };
 
 }  // namespace tesseract
+
+#endif  // !defined(DISABLED_LEGACY_ENGINE)
 
 #endif  // TESSERACT_CCUTIL_AMBIGS_H_

@@ -1,8 +1,7 @@
 /**********************************************************************
- * File:        edgloop.c  (Formerly edgeloop.c)
+ * File:        edgloop.cpp  (Formerly edgeloop.c)
  * Description: Functions to clean up an outline before approximation.
- * Author:					Ray Smith
- * Created:					Tue Mar 26 16:56:25 GMT 1991
+ * Author:      Ray Smith
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,10 +16,8 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#include          "scanedg.h"
-#include          "drawedg.h"
-#include          "edgloop.h"
+#include "scanedg.h"
+#include "edgloop.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
@@ -28,8 +25,6 @@
 #endif
 
 #define MINEDGELENGTH   8        // min decent length
-
-INT_VAR(edges_maxedgelength, 16000, "Max steps in any outline");
 
 /**********************************************************************
  * complete_edge
@@ -40,7 +35,7 @@ INT_VAR(edges_maxedgelength, 16000, "Max steps in any outline");
 void complete_edge(CRACKEDGE *start,  //start of loop
                    C_OUTLINE_IT* outline_it) {
   ScrollView::Color colour;                 //colour to draw in
-  inT16 looplength;              //steps in loop
+  int16_t looplength;              //steps in loop
   ICOORD botleft;                //bounding box
   ICOORD topright;
   C_OUTLINE *outline;            //new outline
@@ -72,10 +67,10 @@ ScrollView::Color check_path_legal(                  //certify outline
                        ) {
   int lastchain;              //last chain code
   int chaindiff;               //chain code diff
-  inT32 length;                  //length of loop
-  inT32 chainsum;                //sum of chain diffs
+  int32_t length;                  //length of loop
+  int32_t chainsum;                //sum of chain diffs
   CRACKEDGE *edgept;             //current point
-  const ERRCODE ED_ILLEGAL_SUM = "Illegal sum of chain codes";
+  constexpr ERRCODE ED_ILLEGAL_SUM("Illegal sum of chain codes");
 
   length = 0;
   chainsum = 0;                  //sum of chain codes
@@ -95,7 +90,7 @@ ScrollView::Color check_path_legal(                  //certify outline
     }
     edgept = edgept->next;
   }
-  while (edgept != start && length < edges_maxedgelength);
+  while (edgept != start && length < C_OUTLINE::kMaxOutlineLength);
 
   if ((chainsum != 4 && chainsum != -4)
   || edgept != start || length < MINEDGELENGTH) {
@@ -119,12 +114,12 @@ ScrollView::Color check_path_legal(                  //certify outline
  * Find the bounding box of the edge loop.
  **********************************************************************/
 
-inT16 loop_bounding_box(                    //get bounding box
+int16_t loop_bounding_box(                    //get bounding box
                         CRACKEDGE *&start,  //edge loop
                         ICOORD &botleft,    //bounding box
                         ICOORD &topright) {
-  inT16 length;                  //length of loop
-  inT16 leftmost;                //on top row
+  int16_t length;                  //length of loop
+  int16_t leftmost;                //on top row
   CRACKEDGE *edgept;             //current point
   CRACKEDGE *realstart;          //topleft start
 

@@ -1,9 +1,8 @@
 /**********************************************************************
  * File:        adaptions.cpp  (Formerly adaptions.c)
  * Description: Functions used to adapt to blobs already confidently
- *					identified
- * Author:		Chris Newton
- * Created:		Thu Oct  7 10:17:28 BST 1993
+ *              identified
+ * Author:      Chris Newton
  *
  * (C) Copyright 1992, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,28 +17,13 @@
  *
  **********************************************************************/
 
-#ifdef _MSC_VER
-#pragma warning(disable:4244)  // Conversion warnings
-#pragma warning(disable:4305)  // int/float warnings
-#endif
-
-#include "mfcpch.h"
-
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
-#include          <ctype.h>
-#include          <string.h>
-#include          "tessbox.h"
-#include          "tessvars.h"
-#include          "memry.h"
-#include          "imgs.h"
-#include          "scaleimg.h"
-#include          "reject.h"
-#include          "control.h"
-#include          "stopper.h"
-#include          "secname.h"
-#include          "tesseractclass.h"
+#include <cctype>
+#include <cstring>
+#include "tessvars.h"
+#include "reject.h"
+#include "control.h"
+#include "stopper.h"
+#include "tesseractclass.h"
 
 // Include automatically generated configuration file if running autoconf.
 #ifdef HAVE_CONFIG_H
@@ -47,17 +31,16 @@
 #endif
 
 namespace tesseract {
-BOOL8 Tesseract::word_adaptable(  //should we adapt?
-                                WERD_RES *word,
-                                uinT16 mode) {
+bool Tesseract::word_adaptable(  //should we adapt?
+        WERD_RES* word,
+        uint16_t mode) {
   if (tessedit_adaption_debug) {
     tprintf("Running word_adaptable() for %s rating %.4f certainty %.4f\n",
-          word->best_choice == NULL ? "" :
           word->best_choice->unichar_string().string(),
           word->best_choice->rating(), word->best_choice->certainty());
   }
 
-  BOOL8 status = FALSE;
+  bool status = false;
   BITS16 flags(mode);
 
   enum MODES
@@ -75,7 +58,7 @@ BOOL8 Tesseract::word_adaptable(  //should we adapt?
   */
   if (mode == 0) {
     if (tessedit_adaption_debug) tprintf("adaption disabled\n");
-    return FALSE;
+    return false;
   }
 
   if (flags.bit (ADAPTABLE_WERD)) {
@@ -93,7 +76,7 @@ BOOL8 Tesseract::word_adaptable(  //should we adapt?
   }
 
   if (!status) {                  // If not set then
-    return FALSE;                // ignore other checks
+    return false;                // ignore other checks
   }
 
   if (flags.bit (CHECK_DAWGS) &&
@@ -102,39 +85,24 @@ BOOL8 Tesseract::word_adaptable(  //should we adapt?
     (word->best_choice->permuter () != USER_DAWG_PERM) &&
     (word->best_choice->permuter () != NUMBER_PERM)) {
     if (tessedit_adaption_debug) tprintf("word not in dawgs\n");
-    return FALSE;
+    return false;
   }
 
-  if (flags.bit (CHECK_ONE_ELL_CONFLICT) && one_ell_conflict (word, FALSE)) {
+  if (flags.bit (CHECK_ONE_ELL_CONFLICT) && one_ell_conflict (word, false)) {
     if (tessedit_adaption_debug) tprintf("word has ell conflict\n");
-    return FALSE;
+    return false;
   }
 
   if (flags.bit (CHECK_SPACES) &&
-    (strchr(word->best_choice->unichar_string().string(), ' ') != NULL)) {
+    (strchr(word->best_choice->unichar_string().string(), ' ') != nullptr)) {
     if (tessedit_adaption_debug) tprintf("word contains spaces\n");
-    return FALSE;
+    return false;
   }
 
-//  if (flags.bit (CHECK_AMBIG_WERD) && test_ambig_word (word))
   if (flags.bit (CHECK_AMBIG_WERD) &&
-      !getDict().NoDangerousAmbig(word->best_choice, NULL, false, NULL, NULL)) {
+      word->best_choice->dangerous_ambig_found()) {
     if (tessedit_adaption_debug) tprintf("word is ambiguous\n");
-    return FALSE;
-  }
-
-  // Do not adapt to words that are composed from fragments if
-  // tessedit_adapt_to_char_fragments is false.
-  if (!tessedit_adapt_to_char_fragments) {
-    const char *fragment_lengths = word->best_choice->fragment_lengths();
-    if (fragment_lengths != NULL && *fragment_lengths != '\0') {
-      for (int i = 0; i < word->best_choice->length(); ++i) {
-        if (fragment_lengths[i] > 1) {
-          if (tessedit_adaption_debug) tprintf("won't adapt to fragments\n");
-          return false;  // found a character composed from fragments
-        }
-      }
-    }
+    return false;
   }
 
   if (tessedit_adaption_debug) {

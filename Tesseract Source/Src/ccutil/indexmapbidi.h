@@ -20,7 +20,7 @@
 #ifndef TESSERACT_CCUTIL_INDEXMAPBIDI_H_
 #define TESSERACT_CCUTIL_INDEXMAPBIDI_H_
 
-#include <stdio.h>
+#include <cstdio>
 #include "genericvector.h"
 
 namespace tesseract {
@@ -41,7 +41,7 @@ class IndexMapBiDi;
 // It must be initialized by copying from an IndexMapBiDi or by DeSerialize.
 class IndexMap {
  public:
-  virtual ~IndexMap() {}
+  virtual ~IndexMap();
 
   // SparseToCompact takes a sparse index to an index in the compact space.
   // Uses a binary search to find the result. For faster speed use
@@ -74,10 +74,10 @@ class IndexMap {
 
  protected:
   // The sparse space covers integers in the range [0, sparse_size_-1].
-  int sparse_size_;
+  int32_t sparse_size_;
   // The compact space covers integers in the range [0, compact_map_.size()-1].
   // Each element contains the corresponding sparse index.
-  GenericVector<inT32> compact_map_;
+  GenericVector<int32_t> compact_map_;
 };
 
 // Bidirectional many-to-one mapping between a sparse and a compact discrete
@@ -101,7 +101,7 @@ class IndexMap {
 //    Allows a many-to-one mapping by merging compact space indices.
 class IndexMapBiDi : public IndexMap {
  public:
-  virtual ~IndexMapBiDi() {}
+  ~IndexMapBiDi() override;
 
   // Top-level init function in a single call to initialize a map to select
   // a single contiguous subrange [start, end) of the sparse space to be mapped
@@ -135,11 +135,11 @@ class IndexMapBiDi : public IndexMap {
   void CompleteMerges();
 
   // SparseToCompact takes a sparse index to an index in the compact space.
-  virtual int SparseToCompact(int sparse_index) const {
+  int SparseToCompact(int sparse_index) const override {
     return sparse_map_[sparse_index];
   }
   // The size of the sparse space.
-  virtual int SparseSize() const {
+  int SparseSize() const override {
     return sparse_map_.size();
   }
 
@@ -172,7 +172,7 @@ class IndexMapBiDi : public IndexMap {
   }
 
   // Direct look-up of the compact index for each element in sparse space.
-  GenericVector<inT32> sparse_map_;
+  GenericVector<int32_t> sparse_map_;
 };
 
 }  // namespace tesseract.

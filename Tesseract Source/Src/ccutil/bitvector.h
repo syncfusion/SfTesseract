@@ -1,10 +1,7 @@
-// Copyright 2011 Google Inc. All Rights Reserved.
-// Author: rays@google.com (Ray Smith)
 ///////////////////////////////////////////////////////////////////////
 // File:        bitvector.h
 // Description: Class replacement for BITVECTOR.
 // Author:      Ray Smith
-// Created:     Mon Jan 10 17:44:01 PST 2011
 //
 // (C) Copyright 2011, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,13 +16,12 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
+#ifndef TESSERACT_CCUTIL_BITVECTOR_H_
+#define TESSERACT_CCUTIL_BITVECTOR_H_
 
-#ifndef TESSERACT_CCUTIL_BITVECTOR_H__
-#define TESSERACT_CCUTIL_BITVECTOR_H__
-
-#include <assert.h>
-#include <stdio.h>
-#include "host.h"
+#include <cassert>
+#include <cstdint>      // for uint8_t
+#include <cstdio>
 
 namespace tesseract {
 
@@ -33,6 +29,16 @@ namespace tesseract {
 // Serialize/DeSerialize. Replaces the old macros.
 class BitVector {
  public:
+  // Fast lookup table to get the first least significant set bit in a byte.
+  // For zero, the table has 255, but since it is a special case, most code
+  // that uses this table will check for zero before looking up lsb_index_.
+  static const uint8_t lsb_index_[256];
+  // Fast lookup table to get the residual bits after zeroing the least
+  // significant set bit in a byte.
+  static const uint8_t lsb_eroded_[256];
+  // Fast lookup table to give the number of set bits in a byte.
+  static const int hamming_table_[256];
+
   BitVector();
   // Initializes the array to length * false.
   explicit BitVector(int length);
@@ -79,6 +85,21 @@ class BitVector {
     return (array_[WordIndex(index)] & BitMask(index)) != 0;
   }
 
+  // Returns the index of the next set bit after the given index.
+  // Useful for quickly iterating through the set bits in a sparse vector.
+  int NextSetBit(int prev_bit) const;
+
+  // Returns the number of set bits in the vector.
+  int NumSetBits() const;
+
+  // Logical in-place operations on whole bit vectors. Tries to do something
+  // sensible if they aren't the same size, but they should be really.
+  void operator|=(const BitVector& other);
+  void operator&=(const BitVector& other);
+  void operator^=(const BitVector& other);
+  // Set subtraction *this = v1 - v2.
+  void SetSubtract(const BitVector& v1, const BitVector& v2);
+
  private:
   // Allocates memory for a vector of the given length.
   void Alloc(int length);
@@ -90,7 +111,7 @@ class BitVector {
     return index / kBitFactor;
   }
   // Returns a mask to select the appropriate bit for the given index.
-  uinT32 BitMask(int index) const {
+  uint32_t BitMask(int index) const {
     return 1 << (index & (kBitFactor - 1));
   }
   // Returns the number of array elements needed to represent the current
@@ -104,13 +125,15 @@ class BitVector {
   }
 
   // Number of bits in this BitVector.
-  uinT32 bit_size_;
+  int32_t bit_size_;
   // Array of words used to pack the bits.
-  uinT32* array_;
+  // Bits are stored little-endian by uint32_t word, ie by word first and then
+  // starting with the least significant bit in each word.
+  uint32_t* array_;
   // Number of bits in an array_ element.
-  static const int kBitFactor = sizeof(uinT32) * 8;
+  static const int kBitFactor = sizeof(uint32_t) * 8;
 };
 
 }  // namespace tesseract.
 
-#endif  // TESSERACT_CCUTIL_BITVECTOR_H__
+#endif  // TESSERACT_CCUTIL_BITVECTOR_H_

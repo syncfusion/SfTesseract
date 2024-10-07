@@ -1,8 +1,8 @@
 /**********************************************************************
  * File:        rect.h  (Formerly box.h)
  * Description: Bounding box class definition.
- * Author:					Phil Cheatle
- * Created:					Wed Oct 16 15:18:45 BST 1991
+ * Author:      Phil Cheatle
+ * Created:     Wed Oct 16 15:18:45 BST 1991
  *
  * (C) Copyright 1991, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,19 +17,24 @@
  *
  **********************************************************************/
 
-#ifndef           RECT_H
-#define           RECT_H
+#ifndef RECT_H
+#define RECT_H
 
-#include <math.h>
-#include "points.h"
-#include "ndminx.h"
-#include "scrollview.h"
-#include "tprintf.h"
+#include <algorithm>           // for std::max, std::min
+#include <cmath>               // for std::ceil, std::floor
+#include <cstdint>             // for INT16_MAX
+#include <cstdio>              // for FILE
+#include "platform.h"          // for DLLSYM
+#include "points.h"            // for ICOORD, FCOORD
+#include "scrollview.h"        // for ScrollView, ScrollView::Color
+#include "tprintf.h"           // for tprintf
+
+class STRING;
 
 class DLLSYM TBOX  {  // bounding box
   public:
     TBOX ():       // empty constructor making a null box
-    bot_left (MAX_INT16, MAX_INT16), top_right (-MAX_INT16, -MAX_INT16) {
+    bot_left (INT16_MAX, INT16_MAX), top_right (-INT16_MAX, -INT16_MAX) {
     }
 
     TBOX(          // constructor
@@ -37,7 +42,7 @@ class DLLSYM TBOX  {  // bounding box
         const ICOORD pt2);  // the other corner
 
     TBOX(                    // constructor
-        inT16 left, inT16 bottom, inT16 right, inT16 top);
+        int16_t left, int16_t bottom, int16_t right, int16_t top);
 
     TBOX(  // box around FCOORD
         const FCOORD pt);
@@ -50,32 +55,38 @@ class DLLSYM TBOX  {  // bounding box
       return bot_left == other.bot_left && top_right == other.top_right;
     }
 
-    inT16 top() const {  // coord of top
+    int16_t top() const {  // coord of top
       return top_right.y ();
     }
     void set_top(int y) {
       top_right.set_y(y);
     }
 
-    inT16 bottom() const {  // coord of bottom
+    int16_t bottom() const {  // coord of bottom
       return bot_left.y ();
     }
     void set_bottom(int y) {
       bot_left.set_y(y);
     }
 
-    inT16 left() const {  // coord of left
+    int16_t left() const {  // coord of left
       return bot_left.x ();
     }
     void set_left(int x) {
       bot_left.set_x(x);
     }
 
-    inT16 right() const {  // coord of right
+    int16_t right() const {  // coord of right
       return top_right.x ();
     }
     void set_right(int x) {
       top_right.set_x(x);
+    }
+    int x_middle() const {
+      return (bot_left.x() + top_right.x()) / 2;
+    }
+    int y_middle() const {
+      return (bot_left.y() + top_right.y()) / 2;
     }
 
     const ICOORD &botleft() const {  // access function
@@ -94,21 +105,21 @@ class DLLSYM TBOX  {  // bounding box
       return top_right;
     }
 
-    inT16 height() const {  // how high is it?
+    int16_t height() const {  // how high is it?
       if (!null_box ())
         return top_right.y () - bot_left.y ();
       else
         return 0;
     }
 
-    inT16 width() const {  // how high is it?
+    int16_t width() const {  // how high is it?
       if (!null_box ())
         return top_right.x () - bot_left.x ();
       else
         return 0;
     }
 
-    inT32 area() const {  // what is the area?
+    int32_t area() const {  // what is the area?
       if (!null_box ())
         return width () * height ();
       else
@@ -124,22 +135,22 @@ class DLLSYM TBOX  {  // bounding box
     }
 
     void move_bottom_edge(                  // move one edge
-                          const inT16 y) {  // by +/- y
+                          const int16_t y) {  // by +/- y
       bot_left += ICOORD (0, y);
     }
 
     void move_left_edge(                  // move one edge
-                        const inT16 x) {  // by +/- x
+                        const int16_t x) {  // by +/- x
       bot_left += ICOORD (x, 0);
     }
 
     void move_right_edge(                  // move one edge
-                         const inT16 x) {  // by +/- x
+                         const int16_t x) {  // by +/- x
       top_right += ICOORD (x, 0);
     }
 
     void move_top_edge(                  // move one edge
-                       const inT16 y) {  // by +/- y
+                       const int16_t y) {  // by +/- y
       top_right += ICOORD (0, y);
     }
 
@@ -151,29 +162,33 @@ class DLLSYM TBOX  {  // bounding box
 
     void move(                     // move box
               const FCOORD vec) {  // by float vector
-      bot_left.set_x ((inT16) floor (bot_left.x () + vec.x ()));
+      bot_left.set_x(static_cast<int16_t>(std::floor(bot_left.x() + vec.x())));
       // round left
-      bot_left.set_y ((inT16) floor (bot_left.y () + vec.y ()));
+      bot_left.set_y(static_cast<int16_t>(std::floor(bot_left.y() + vec.y())));
       // round down
-      top_right.set_x ((inT16) ceil (top_right.x () + vec.x ()));
+      top_right.set_x(static_cast<int16_t>(std::ceil(top_right.x() + vec.x())));
       // round right
-      top_right.set_y ((inT16) ceil (top_right.y () + vec.y ()));
+      top_right.set_y(static_cast<int16_t>(std::ceil(top_right.y() + vec.y())));
       // round up
     }
 
     void scale(                  // scale box
                const float f) {  // by multiplier
-      bot_left.set_x ((inT16) floor (bot_left.x () * f));  // round left
-      bot_left.set_y ((inT16) floor (bot_left.y () * f));  // round down
-      top_right.set_x ((inT16) ceil (top_right.x () * f));  // round right
-      top_right.set_y ((inT16) ceil (top_right.y () * f));  // round up
+      // round left
+      bot_left.set_x(static_cast<int16_t>(std::floor(bot_left.x() * f)));
+      // round down
+      bot_left.set_y(static_cast<int16_t>(std::floor(bot_left.y() * f)));
+      // round right
+      top_right.set_x(static_cast<int16_t>(std::ceil(top_right.x() * f)));
+      // round up
+      top_right.set_y(static_cast<int16_t>(std::ceil(top_right.y() * f)));
     }
     void scale(                     // scale box
                const FCOORD vec) {  // by float vector
-      bot_left.set_x ((inT16) floor (bot_left.x () * vec.x ()));
-      bot_left.set_y ((inT16) floor (bot_left.y () * vec.y ()));
-      top_right.set_x ((inT16) ceil (top_right.x () * vec.x ()));
-      top_right.set_y ((inT16) ceil (top_right.y () * vec.y ()));
+      bot_left.set_x(static_cast<int16_t>(std::floor(bot_left.x() * vec.x())));
+      bot_left.set_y(static_cast<int16_t>(std::floor(bot_left.y() * vec.y())));
+      top_right.set_x(static_cast<int16_t>(std::ceil(top_right.x() * vec.x())));
+      top_right.set_y(static_cast<int16_t>(std::ceil(top_right.y() * vec.y())));
     }
 
     // rotate doesn't enlarge the box - it just rotates the bottom-left
@@ -208,16 +223,16 @@ class DLLSYM TBOX  {  // bounding box
     // overlap horizontally then the return value is negative, indicating
     // the amount of the overlap.
     int x_gap(const TBOX& box) const {
-      return MAX(bot_left.x(), box.bot_left.x()) -
-             MIN(top_right.x(), box.top_right.x());
+      return std::max(bot_left.x(), box.bot_left.x()) -
+              std::min(top_right.x(), box.top_right.x());
     }
 
     // Return the vertical gap between the boxes. If the boxes
     // overlap vertically then the return value is negative, indicating
     // the amount of the overlap.
     int y_gap(const TBOX& box) const {
-      return MAX(bot_left.y(), box.bot_left.y()) -
-             MIN(top_right.y(), box.top_right.y());
+      return std::max(bot_left.y(), box.bot_left.y()) -
+              std::min(top_right.y(), box.top_right.y());
     }
 
     // Do boxes overlap on x axis by more than
@@ -264,15 +279,8 @@ class DLLSYM TBOX  {  // bounding box
       tprintf("Bounding box=(%d,%d)->(%d,%d)\n",
               left(), bottom(), right(), top());
     }
-
-    // Same as print(), but appends debug information to the given string
-    // instead of printing it to stdout.
-    void append_debug(STRING *str) const {
-      char buffer[256];
-      sprintf(buffer, "Bounding box=(%d,%d)->(%d,%d)\n",
-              left(), bottom(), right(), top());
-      *str += buffer;
-    }
+    // Appends the bounding box as (%d,%d)->(%d,%d) to a STRING.
+    void print_to_str(STRING *str) const;
 
 #ifndef GRAPHICS_DISABLED
     void plot(                    // use current settings
@@ -307,11 +315,13 @@ class DLLSYM TBOX  {  // bounding box
  *
  **********************************************************************/
 
-inline TBOX::TBOX(               // construtor
-                const FCOORD pt  // floating centre
-               ) {
-  bot_left = ICOORD ((inT16) floor (pt.x ()), (inT16) floor (pt.y ()));
-  top_right = ICOORD ((inT16) ceil (pt.x ()), (inT16) ceil (pt.y ()));
+inline TBOX::TBOX(   // constructor
+    const FCOORD pt  // floating centre
+    ) {
+  bot_left = ICOORD(static_cast<int16_t>(std::floor(pt.x())),
+                    static_cast<int16_t>(std::floor(pt.y())));
+  top_right = ICOORD(static_cast<int16_t>(std::ceil(pt.x())),
+                     static_cast<int16_t>(std::ceil(pt.y())));
 }
 
 
@@ -357,15 +367,15 @@ inline bool TBOX::overlap(  // do boxes overlap
 
 inline bool TBOX::major_overlap(  // Do boxes overlap more that half.
                                 const TBOX &box) const {
-  int overlap = MIN(box.top_right.x(), top_right.x());
-  overlap -= MAX(box.bot_left.x(), bot_left.x());
+  int overlap = std::min(box.top_right.x(), top_right.x());
+  overlap -= std::max(box.bot_left.x(), bot_left.x());
   overlap += overlap;
-  if (overlap < MIN(box.width(), width()))
+  if (overlap < std::min(box.width(), width()))
     return false;
-  overlap = MIN(box.top_right.y(), top_right.y());
-  overlap -= MAX(box.bot_left.y(), bot_left.y());
+  overlap = std::min(box.top_right.y(), top_right.y());
+  overlap -= std::max(box.bot_left.y(), bot_left.y());
   overlap += overlap;
-  if (overlap < MIN(box.height(), height()))
+  if (overlap < std::min(box.height(), height()))
     return false;
   return true;
 }
@@ -400,7 +410,7 @@ inline bool TBOX::x_overlap(const TBOX &box) const {
  **********************************************************************/
 
 inline bool TBOX::major_x_overlap(const TBOX &box) const {
-  inT16 overlap = box.width();
+  int16_t overlap = box.width();
   if (this->left() > box.left()) {
     overlap -= this->left() - box.left();
   }
@@ -427,7 +437,7 @@ inline bool TBOX::y_overlap(const TBOX &box) const {
  **********************************************************************/
 
 inline bool TBOX::major_y_overlap(const TBOX &box) const {
-  inT16 overlap = box.height();
+  int16_t overlap = box.height();
   if (this->bottom() > box.bottom()) {
     overlap -= this->bottom() - box.bottom();
   }
@@ -445,8 +455,8 @@ inline bool TBOX::major_y_overlap(const TBOX &box) const {
  **********************************************************************/
 
 inline double TBOX::x_overlap_fraction(const TBOX& other) const {
-  int low = MAX(left(), other.left());
-  int high = MIN(right(), other.right());
+  int low = std::max(left(), other.left());
+  int high = std::min(right(), other.right());
   int width = right() - left();
   if (width == 0) {
     int x = left();
@@ -455,7 +465,7 @@ inline double TBOX::x_overlap_fraction(const TBOX& other) const {
     else
       return 0.0;
   } else {
-    return MAX(0, static_cast<double>(high - low) / width);
+    return std::max(0.0, static_cast<double>(high - low) / width);
   }
 }
 
@@ -467,8 +477,8 @@ inline double TBOX::x_overlap_fraction(const TBOX& other) const {
  **********************************************************************/
 
 inline double TBOX::y_overlap_fraction(const TBOX& other) const {
-  int low = MAX(bottom(), other.bottom());
-  int high = MIN(top(), other.top());
+  int low = std::max(bottom(), other.bottom());
+  int high = std::min(top(), other.top());
   int height = top() - bottom();
   if (height == 0) {
     int y = bottom();
@@ -477,7 +487,7 @@ inline double TBOX::y_overlap_fraction(const TBOX& other) const {
     else
       return 0.0;
   } else {
-    return MAX(0, static_cast<double>(high - low) / height);
+    return std::max(0.0, static_cast<double>(high - low) / height);
   }
 }
 

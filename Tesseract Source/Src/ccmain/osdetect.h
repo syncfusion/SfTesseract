@@ -17,16 +17,18 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_CCMAIN_OSDETECT_H__
-#define TESSERACT_CCMAIN_OSDETECT_H__
+#ifndef TESSERACT_CCMAIN_OSDETECT_H_
+#define TESSERACT_CCMAIN_OSDETECT_H_
 
-#include "strngs.h"
-#include "unicharset.h"
+#include "platform.h"  // for TESS_API
 
-class TO_BLOCK_LIST;
 class BLOBNBOX;
-class BLOB_CHOICE_LIST;
 class BLOBNBOX_CLIST;
+class BLOB_CHOICE_LIST;
+class STRING;
+class TO_BLOCK_LIST;
+class UNICHARSET;
+template <typename T> class GenericVector;
 
 namespace tesseract {
 class Tesseract;
@@ -45,7 +47,7 @@ struct OSBestResult {
 };
 
 struct OSResults {
-  OSResults() : unicharset(NULL) {
+  OSResults() : unicharset(nullptr) {
     for (int i = 0; i < 4; ++i) {
       for (int j = 0; j < kMaxNumberOfScripts; ++j)
         scripts_na[i][j] = 0;
@@ -59,7 +61,7 @@ struct OSResults {
   // orientation id.
   void update_best_script(int orientation_id);
   // Return the index of the script with the highest score for this orientation.
-  int get_best_script(int orientation_id) const;
+  TESS_API int get_best_script(int orientation_id) const;
   // Accumulate scores with given OSResults instance and update the best script.
   void accumulate(const OSResults& osr);
 
@@ -81,18 +83,20 @@ struct OSResults {
 
 class OrientationDetector {
  public:
-  OrientationDetector(OSResults*);
+  OrientationDetector(const GenericVector<int>* allowed_scripts,
+                      OSResults* results);
   bool detect_blob(BLOB_CHOICE_LIST* scores);
   int get_orientation();
  private:
   OSResults* osr_;
+  const GenericVector<int>* allowed_scripts_;
 };
 
 class ScriptDetector {
  public:
-  ScriptDetector(OSResults*, tesseract::Tesseract* tess);
+  ScriptDetector(const GenericVector<int>* allowed_scripts,
+                 OSResults* osr, tesseract::Tesseract* tess);
   void detect_blob(BLOB_CHOICE_LIST* scores);
-  void get_script() ;
   bool must_stop(int orientation);
  private:
   OSResults* osr_;
@@ -108,6 +112,7 @@ class ScriptDetector {
   int latin_id_;
   int fraktur_id_;
   tesseract::Tesseract* tess_;
+  const GenericVector<int>* allowed_scripts_;
 };
 
 int orientation_and_script_detection(STRING& filename,
@@ -118,7 +123,8 @@ int os_detect(TO_BLOCK_LIST* port_blocks,
               OSResults* osr,
               tesseract::Tesseract* tess);
 
-int os_detect_blobs(BLOBNBOX_CLIST* blob_list,
+int os_detect_blobs(const GenericVector<int>* allowed_scripts,
+                    BLOBNBOX_CLIST* blob_list,
                     OSResults* osr,
                     tesseract::Tesseract* tess);
 
@@ -129,6 +135,6 @@ bool os_detect_blob(BLOBNBOX* bbox, OrientationDetector* o,
 // Helper method to convert an orientation index to its value in degrees.
 // The value represents the amount of clockwise rotation in degrees that must be
 // applied for the text to be upright (readable).
-const int OrientationIdToValue(const int& id);
+TESS_API int OrientationIdToValue(const int& id);
 
-#endif  // TESSERACT_CCMAIN_OSDETECT_H__
+#endif  // TESSERACT_CCMAIN_OSDETECT_H_

@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        underlin.cpp  (Formerly undrline.c)
  * Description: Code to chop blobs apart from underlines.
- * Author:		Ray Smith
- * Created:		Mon Aug  8 11:14:00 BST 1994
+ * Author:      Ray Smith
  *
  * (C) Copyright 1994, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,18 +16,10 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
-#ifdef __UNIX__
-#include          <assert.h>
-#endif
-#include          "underlin.h"
+#include "underlin.h"
 
-#define PROJECTION_MARGIN 10     //arbitrary
-#define EXTERN
-
-EXTERN double_VAR (textord_underline_offset, 0.1, "Fraction of x to ignore");
-EXTERN BOOL_VAR (textord_restore_underlines, TRUE,
-"Chop underlines & put back");
+double_VAR (textord_underline_offset, 0.1, "Fraction of x to ignore");
+BOOL_VAR (textord_restore_underlines, true, "Chop underlines & put back");
 
 /**********************************************************************
  * restore_underlined_blobs
@@ -39,7 +30,7 @@ EXTERN BOOL_VAR (textord_restore_underlines, TRUE,
 void restore_underlined_blobs(                 //get chop points
                               TO_BLOCK *block  //block to do
                              ) {
-  inT16 chop_coord;              //chop boundary
+  int16_t chop_coord;              //chop boundary
   TBOX blob_box;                  //of underline
   BLOBNBOX *u_line;              //underline bit
   TO_ROW *row;                   //best row for blob
@@ -60,6 +51,8 @@ void restore_underlined_blobs(                 //get chop points
     u_line = under_it.extract ();
     blob_box = u_line->bounding_box ();
     row = most_overlapping_row (block->get_rows (), u_line);
+    if (row == nullptr)
+      return;  // Don't crash if there is no row.
     find_underlined_blobs (u_line, &row->baseline, row->xheight,
       row->xheight * textord_underline_offset,
       &chop_cells);
@@ -76,31 +69,23 @@ void restore_underlined_blobs(                 //get chop points
           ru_it.add_after_then_move(new BLOBNBOX(new C_BLOB(&left_coutlines)));
         }
         chop_coord = cell_it.data ()->y ();
-        split_to_blob(NULL, chop_coord, textord_fp_chop_error + 0.5,
+        split_to_blob(nullptr, chop_coord, textord_fp_chop_error + 0.5,
                       &left_coutlines, &right_coutlines);
         if (!left_coutlines.empty()) {
           row->insert_blob(new BLOBNBOX(new C_BLOB(&left_coutlines)));
-        } else {
-          fprintf(stderr,
-            "Error:no outlines after chopping from %d to %d from (%d,%d)->(%d,%d)\n",
-            cell_it.data ()->x (), cell_it.data ()->y (),
-            blob_box.left (), blob_box.bottom (),
-            blob_box.right (), blob_box.top ());
-          ASSERT_HOST(FALSE);
         }
-        u_line = NULL;           //no more blobs to add
+        u_line = nullptr;           //no more blobs to add
       }
       delete cell_it.extract();
     }
     if (!right_coutlines.empty ()) {
-      split_to_blob(NULL, blob_box.right(), textord_fp_chop_error + 0.5,
+      split_to_blob(nullptr, blob_box.right(), textord_fp_chop_error + 0.5,
                     &left_coutlines, &right_coutlines);
       if (!left_coutlines.empty())
         ru_it.add_after_then_move(new BLOBNBOX(new C_BLOB(&left_coutlines)));
     }
-    if (u_line != NULL) {
-      if (u_line->cblob() != NULL)
-        delete u_line->cblob();
+    if (u_line != nullptr) {
+      delete u_line->cblob();
       delete u_line;
     }
   }
@@ -123,7 +108,7 @@ TO_ROW *most_overlapping_row(                    //find best row
                              TO_ROW_LIST *rows,  //list of rows
                              BLOBNBOX *blob      //blob to place
                             ) {
-  inT16 x = (blob->bounding_box ().left ()
+  int16_t x = (blob->bounding_box ().left ()
     + blob->bounding_box ().right ()) / 2;
   TO_ROW_IT row_it = rows;       //row iterator
   TO_ROW *row;                   //current row
@@ -131,10 +116,10 @@ TO_ROW *most_overlapping_row(                    //find best row
   float overlap;                 //of blob & row
   float bestover;                //best overlap
 
-  best_row = NULL;
-  bestover = (float) -MAX_INT32;
+  best_row = nullptr;
+  bestover = static_cast<float>(-INT32_MAX);
   if (row_it.empty ())
-    return NULL;
+    return nullptr;
   row = row_it.data ();
   row_it.mark_cycle_pt ();
   while (row->baseline.y (x) + row->descdrop > blob->bounding_box ().top ()
@@ -183,7 +168,7 @@ void find_underlined_blobs(                            //get chop points
                            float baseline_offset,      //amount to shrinke it
                            ICOORDELT_LIST *chop_cells  //places to chop
                           ) {
-  inT16 x, y;                    //sides of blob
+  int16_t x, y;                    //sides of blob
   ICOORD blob_chop;              //sides of blob
   TBOX blob_box = u_line->bounding_box ();
                                  //cell iterator
@@ -193,7 +178,7 @@ void find_underlined_blobs(                            //get chop points
   STATS lower_proj (blob_box.left (), blob_box.right () + 1);
   C_OUTLINE_IT out_it;           //outlines of blob
 
-  ASSERT_HOST (u_line->cblob () != NULL);
+  ASSERT_HOST (u_line->cblob () != nullptr);
 
   out_it.set_to_list (u_line->cblob ()->out_list ());
   for (out_it.mark_cycle_pt (); !out_it.cycled_list (); out_it.forward ()) {
@@ -232,9 +217,9 @@ void vertical_cunderline_projection(                        //project outlines
                                    ) {
   ICOORD pos;                    //current point
   ICOORD step;                   //edge step
-  inT16 lower_y, upper_y;        //region limits
-  inT32 length;                  //of outline
-  inT16 stepindex;               //current step
+  int16_t lower_y, upper_y;        //region limits
+  int32_t length;                  //of outline
+  int16_t stepindex;               //current step
   C_OUTLINE_IT out_it = outline->child ();
 
   pos = outline->start_pos ();
@@ -243,10 +228,10 @@ void vertical_cunderline_projection(                        //project outlines
     step = outline->step (stepindex);
     if (step.x () > 0) {
       lower_y =
-        (inT16) floor (baseline->y (pos.x ()) + baseline_offset + 0.5);
+        static_cast<int16_t>(floor (baseline->y (pos.x ()) + baseline_offset + 0.5));
       upper_y =
-        (inT16) floor (baseline->y (pos.x ()) + baseline_offset +
-        xheight + 0.5);
+        static_cast<int16_t>(floor (baseline->y (pos.x ()) + baseline_offset +
+        xheight + 0.5));
       if (pos.y () >= lower_y) {
         lower_proj->add (pos.x (), -lower_y);
         if (pos.y () >= upper_y) {
@@ -261,11 +246,11 @@ void vertical_cunderline_projection(                        //project outlines
     }
     else if (step.x () < 0) {
       lower_y =
-        (inT16) floor (baseline->y (pos.x () - 1) + baseline_offset +
-        0.5);
+        static_cast<int16_t>(floor (baseline->y (pos.x () - 1) + baseline_offset +
+        0.5));
       upper_y =
-        (inT16) floor (baseline->y (pos.x () - 1) + baseline_offset +
-        xheight + 0.5);
+        static_cast<int16_t>(floor (baseline->y (pos.x () - 1) + baseline_offset +
+        xheight + 0.5));
       if (pos.y () >= lower_y) {
         lower_proj->add (pos.x () - 1, lower_y);
         if (pos.y () >= upper_y) {

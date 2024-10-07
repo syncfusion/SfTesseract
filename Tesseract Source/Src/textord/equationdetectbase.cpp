@@ -23,15 +23,14 @@
 
 namespace tesseract {
 
-EquationDetectBase::EquationDetectBase() {
-}
-
-EquationDetectBase::~EquationDetectBase() {
-}
+// Destructor.
+// It is defined here, so the compiler can create a single vtable
+// instead of weak vtables in every compilation unit.
+EquationDetectBase::~EquationDetectBase() = default;
 
 void EquationDetectBase::RenderSpecialText(Pix* pix,
                                            BLOBNBOX* blob) {
-  ASSERT_HOST(pix != NULL && pixGetDepth(pix) == 32 && blob != NULL);
+  ASSERT_HOST(pix != nullptr && pixGetDepth(pix) == 32 && blob != nullptr);
   const TBOX& tbox = blob->bounding_box();
   int height = pixGetHeight(pix);
   const int box_width = 5;
@@ -62,4 +61,4 @@ void EquationDetectBase::RenderSpecialText(Pix* pix,
   boxDestroy(&box);
 }
 
-};  // namespace tesseract
+}  // namespace tesseract

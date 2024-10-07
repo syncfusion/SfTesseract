@@ -1,10 +1,9 @@
 /******************************************************************************
- **	Filename:    intmatcher.h
- **	Purpose:     Interface to high level generic classifier routines.
- **	Author:      Robert Moss
- **	History:     Wed Feb 13 15:24:15 MST 1991, RWM, Created.
+ ** Filename:    intmatcher.h
+ ** Purpose:     Interface to high level generic classifier routines.
+ ** Author:      Robert Moss
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -24,11 +23,11 @@
 // but turned on/off on the language-by-language basis or depending
 // on particular properties of the corpus (e.g. when we expect the
 // images to have low exposure).
-extern BOOL_VAR_H(disable_character_fragments, FALSE,
+extern BOOL_VAR_H(disable_character_fragments, false,
                   "Do not include character fragments in the"
                   " results of the classifier");
 
-extern INT_VAR_H(classify_integer_matcher_multiplier, 14,
+extern INT_VAR_H(classify_integer_matcher_multiplier, 10,
                  "Integer Matcher Multiplier  0-255:   ");
 
 
@@ -36,35 +35,18 @@ extern INT_VAR_H(classify_integer_matcher_multiplier, 14,
           Include Files and Type Defines
 ----------------------------------------------------------------------------**/
 #include "intproto.h"
-#include "cutoffs.h"
 
-struct INT_RESULT_STRUCT {
-  FLOAT32 Rating;
-  uinT8 Config;
-  uinT8 Config2;
-  uinT16 FeatureMisses;
-};
-
-typedef INT_RESULT_STRUCT *INT_RESULT;
-
+namespace tesseract {
+struct UnicharRating;
+}
 
 struct CP_RESULT_STRUCT {
-  FLOAT32 Rating;
-  INT_RESULT_STRUCT IMResult;
+  CP_RESULT_STRUCT() : Rating(0.0f), Class(0) {}
+
+  float Rating;
   CLASS_ID Class;
 };
 
-typedef CP_RESULT_STRUCT CLASS_PRUNER_RESULTS[MAX_NUM_CLASSES];
-
-/*----------------------------------------------------------------------------
-            Variables
------------------------------------------------------------------------------*/
-
-extern INT_VAR_H(classify_adapt_proto_thresh, 230,
-                 "Threshold for good protos during adaptive 0-255:   ");
-
-extern INT_VAR_H(classify_adapt_feature_thresh, 230,
-                 "Threshold for good features during adaptive 0-255:   ");
 
 /**----------------------------------------------------------------------------
           Public Function Prototypes
@@ -74,16 +56,15 @@ extern INT_VAR_H(classify_adapt_feature_thresh, 230,
 #define  SE_TABLE_SIZE  512
 
 struct ScratchEvidence {
-  uinT8 feature_evidence_[MAX_NUM_CONFIGS];
+  uint8_t feature_evidence_[MAX_NUM_CONFIGS];
   int sum_feature_evidence_[MAX_NUM_CONFIGS];
-  uinT8 proto_evidence_[MAX_NUM_PROTOS][MAX_PROTO_INDEX];
+  uint8_t proto_evidence_[MAX_NUM_PROTOS][MAX_PROTO_INDEX];
 
   void Clear(const INT_CLASS class_template);
   void ClearFeatureEvidence(const INT_CLASS class_template);
-  void NormalizeSums(INT_CLASS ClassTemplate, inT16 NumFeatures,
-                     inT32 used_features);
+  void NormalizeSums(INT_CLASS ClassTemplate, int16_t NumFeatures);
   void UpdateSumOfProtoEvidences(
-    INT_CLASS ClassTemplate, BIT_VECTOR ConfigMask, inT16 NumFeatures);
+    INT_CLASS ClassTemplate, BIT_VECTOR ConfigMask);
 };
 
 
@@ -100,20 +81,14 @@ class IntegerMatcher {
   // Center of Similarity Curve.
   static const float kSimilarityCenter;
 
-  IntegerMatcher() : classify_debug_level_(0) {}
-
-  void Init(tesseract::IntParam *classify_debug_level,
-            int classify_integer_matcher_multiplier);
-
-  void SetBaseLineMatch();
-  void SetCharNormMatch(int integer_matcher_multiplier);
+  IntegerMatcher(tesseract::IntParam *classify_debug_level);
 
   void Match(INT_CLASS ClassTemplate,
              BIT_VECTOR ProtoMask,
              BIT_VECTOR ConfigMask,
-             inT16 NumFeatures,
+             int16_t NumFeatures,
              const INT_FEATURE_STRUCT* Features,
-             INT_RESULT Result,
+             tesseract::UnicharRating* Result,
              int AdaptFeatureThreshold,
              int Debug,
              bool SeparateDebugWindows);
@@ -121,13 +96,12 @@ class IntegerMatcher {
   // Applies the CN normalization factor to the given rating and returns
   // the modified rating.
   float ApplyCNCorrection(float rating, int blob_length,
-                          int normalization_factor);
+                          int normalization_factor, int matcher_multiplier);
 
   int FindGoodProtos(INT_CLASS ClassTemplate,
                      BIT_VECTOR ProtoMask,
                      BIT_VECTOR ConfigMask,
-                     uinT16 BlobLength,
-                     inT16 NumFeatures,
+                     int16_t NumFeatures,
                      INT_FEATURE_ARRAY Features,
                      PROTO_ID *ProtoArray,
                      int AdaptProtoThreshold,
@@ -136,8 +110,7 @@ class IntegerMatcher {
   int FindBadFeatures(INT_CLASS ClassTemplate,
                       BIT_VECTOR ProtoMask,
                       BIT_VECTOR ConfigMask,
-                      uinT16 BlobLength,
-                      inT16 NumFeatures,
+                      int16_t NumFeatures,
                       INT_FEATURE_ARRAY Features,
                       FEATURE_ID *FeatureArray,
                       int AdaptFeatureThreshold,
@@ -155,7 +128,7 @@ class IntegerMatcher {
 
   int FindBestMatch(INT_CLASS ClassTemplate,
                     const ScratchEvidence &tables,
-                    INT_RESULT Result);
+                    tesseract::UnicharRating* Result);
 
 #ifndef GRAPHICS_DISABLED
   void DebugFeatureProtoError(
@@ -163,12 +136,11 @@ class IntegerMatcher {
       BIT_VECTOR ProtoMask,
       BIT_VECTOR ConfigMask,
       const ScratchEvidence &tables,
-      inT16 NumFeatures,
+      int16_t NumFeatures,
       int Debug);
 
   void DisplayProtoDebugInfo(
       INT_CLASS ClassTemplate,
-      BIT_VECTOR ProtoMask,
       BIT_VECTOR ConfigMask,
       const ScratchEvidence &tables,
       bool SeparateDebugWindows);
@@ -177,42 +149,20 @@ class IntegerMatcher {
       INT_CLASS ClassTemplate,
       BIT_VECTOR ProtoMask,
       BIT_VECTOR ConfigMask,
-      inT16 NumFeatures,
+      int16_t NumFeatures,
       const INT_FEATURE_STRUCT* Features,
       int AdaptFeatureThreshold,
       int Debug,
       bool SeparateDebugWindows);
-
-  void DebugBestMatch(int BestMatch, INT_RESULT Result);
 #endif
 
-
  private:
-  uinT8 similarity_evidence_table_[SE_TABLE_SIZE];
-  uinT32 evidence_table_mask_;
-  uinT32 mult_trunc_shift_bits_;
-  uinT32 table_trunc_shift_bits_;
-  inT16 local_matcher_multiplier_;
   tesseract::IntParam *classify_debug_level_;
-  uinT32 evidence_mult_mask_;
+  uint8_t similarity_evidence_table_[SE_TABLE_SIZE];
+  uint32_t evidence_table_mask_;
+  uint32_t mult_trunc_shift_bits_;
+  uint32_t table_trunc_shift_bits_;
+  uint32_t evidence_mult_mask_;
 };
 
-/**----------------------------------------------------------------------------
-          Private Function Prototypes
-----------------------------------------------------------------------------**/
-void IMDebugConfiguration(INT_FEATURE FeatureNum,
-                          uinT16 ActualProtoNum,
-                          uinT8 Evidence,
-                          BIT_VECTOR ConfigMask,
-                          uinT32 ConfigWord);
-
-void IMDebugConfigurationSum(INT_FEATURE FeatureNum,
-                             uinT8 *FeatureEvidence,
-                             inT32 ConfigCount);
-
-void HeapSort (int n, register int ra[], register int rb[]);
-
-/**----------------------------------------------------------------------------
-        Global Data Definitions and Declarations
-----------------------------------------------------------------------------**/
 #endif

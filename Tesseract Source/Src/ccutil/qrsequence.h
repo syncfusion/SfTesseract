@@ -27,11 +27,11 @@
 #ifndef TESSERACT_CCUTIL_QRSEQUENCE_H_
 #define TESSERACT_CCUTIL_QRSEQUENCE_H_
 
-#include <math.h>
+#include <cmath>
 
 class QRSequenceGenerator {
  public:
-  // Object is initalized with the size of the output range.
+  // Object is initialized with the size of the output range.
   explicit QRSequenceGenerator(int N) : N_(N), next_num_(0) {
     num_bits_ = static_cast<int>(ceil(log(static_cast<double>(N)) / log(2.0)));
   }

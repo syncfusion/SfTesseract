@@ -11,46 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#define _USE_MATH_DEFINES       // for M_PI
 #include "commontraining.h"
+#include <algorithm>
+#include <cmath>                // for M_PI
 
-#ifndef USE_STD_NAMESPACE
-#include "base/init_google.h"
-#include "base/commandlineflags.h"
-#endif
-#include "allheaders.h"
-#include "ccutil.h"
-#include "classify.h"
-#include "oldlist.h"
-#include "globals.h"
-#include "mf.h"
-#include "clusttool.h"
-#include "cluster.h"
-#include "tessopt.h"
-#include "efio.h"
-#include "emalloc.h"
-#include "featdefs.h"
-#include "fontinfo.h"
-#include "intfeaturespace.h"
-#include "mastertrainer.h"
-#include "tessdatamanager.h"
-#include "tprintf.h"
-#include "freelist.h"
+#ifdef DISABLED_LEGACY_ENGINE
+
 #include "params.h"
-#include "shapetable.h"
-#include "unicity_table.h"
-
-#include <math.h>
-
-using tesseract::CCUtil;
-using tesseract::FontInfo;
-using tesseract::IntFeatureSpace;
-using tesseract::ParamUtils;
-using tesseract::ShapeTable;
-
-// Global Variables.
-// global variable to hold configuration parameters to control clustering
-// -M 0.625   -B 0.05   -I 1.0   -C 1e-6.
-CLUSTERCONFIG Config = { elliptical, 0.625, 0.05, 1.0, 1e-6, 0 };
+#include "tessopt.h"
+#include "tprintf.h"
 
 INT_PARAM_FLAG(debug_level, 0, "Level of Trainer debugging");
 INT_PARAM_FLAG(load_images, 0, "Load images with tr files");
@@ -60,114 +30,116 @@ STRING_PARAM_FLAG(F, "font_properties", "File listing font properties");
 STRING_PARAM_FLAG(X, "", "File listing font xheights");
 STRING_PARAM_FLAG(U, "unicharset", "File to load unicharset from");
 STRING_PARAM_FLAG(O, "", "File to write unicharset to");
-STRING_PARAM_FLAG(input_trainer, "", "File to load trainer from");
 STRING_PARAM_FLAG(output_trainer, "", "File to write trainer to");
 STRING_PARAM_FLAG(test_ch, "", "UTF8 test character string");
 
-// The usage strings are different as the DEFINE_* flags are available on
-// the command line, but the *_VAR flags are set through a config file with
-// some of them available through special command-line args.
-#ifndef USE_STD_NAMESPACE
-const char* kUsage = "[flags] [ .tr files ... ]\n";
-#else
-const char* kUsage = "[-c configfile]\n"
-    "\t[-D Directory]\n"
-    "\t[-M MinSamples] [-B MaxBad] [-I Independence] [-C Confidence]\n"
-    "\t[-U InputUnicharset]\n"
-    "\t[-O OutputUnicharset]\n"
-    "\t[-F FontInfoFile]\n"
-    "\t[-X InputXHeightsFile]\n"
-    "\t[-S InputShapeTable]\n"
-    "\t[ .tr files ... ]\n";
-#endif
-
-FEATURE_DEFS_STRUCT feature_defs;
-CCUtil ccutil;
-
-/*---------------------------------------------------------------------------*/
-void ParseArguments(int* argc, char ***argv) {
-/*
- **	Parameters:
- **		argc	number of command line arguments to parse
- **		argv	command line arguments
- **	Globals:
- **		ShowSignificantProtos	flag controlling proto display
- **		ShowInsignificantProtos	flag controlling proto display
- **		Config			current clustering parameters
- **		tessoptarg, tessoptind		defined by tessopt sys call
- **		Argc, Argv		global copies of argc and argv
- **	Operation:
- **		This routine parses the command line arguments that were
- **		passed to the program.  The legal arguments are shown in the usage
- **		message below:
-
- **	Return: none
- **	Exceptions: Illegal options terminate the program.
- **	History: 7/24/89, DSJ, Created.
+/**
+ * This routine parses the command line arguments that were
+ * passed to the program and uses them to set relevant
+ * training-related global parameters.
+ *
+ * Globals:
+ * - Config  current clustering parameters
+ * @param argc number of command line arguments to parse
+ * @param argv command line arguments
+ * @note Exceptions: Illegal options terminate the program.
  */
-#ifndef USE_STD_NAMESPACE
-  InitGoogle(kUsage, argc, argv, true);
-  tessoptind = 1;
-#else
-  int    Option;
-  int    ParametersRead;
-  BOOL8  Error;
-
-  Error = FALSE;
-  while ((Option = tessopt(*argc, *argv, "F:O:U:D:C:I:M:B:S:X:c:")) != EOF) {
-    switch (Option) {
-      case 'C':
-        ParametersRead = sscanf(tessoptarg, "%lf", &(Config.Confidence) );
-        if ( ParametersRead != 1 ) Error = TRUE;
-        else if ( Config.Confidence > 1 ) Config.Confidence = 1;
-        else if ( Config.Confidence < 0 ) Config.Confidence = 0;
-        break;
-      case 'I':
-        ParametersRead = sscanf(tessoptarg, "%f", &(Config.Independence) );
-        if ( ParametersRead != 1 ) Error = TRUE;
-        else if ( Config.Independence > 1 ) Config.Independence = 1;
-        else if ( Config.Independence < 0 ) Config.Independence = 0;
-        break;
-      case 'M':
-        ParametersRead = sscanf(tessoptarg, "%f", &(Config.MinSamples) );
-        if ( ParametersRead != 1 ) Error = TRUE;
-        else if ( Config.MinSamples > 1 ) Config.MinSamples = 1;
-        else if ( Config.MinSamples < 0 ) Config.MinSamples = 0;
-        break;
-      case 'B':
-        ParametersRead = sscanf(tessoptarg, "%f", &(Config.MaxIllegal) );
-        if ( ParametersRead != 1 ) Error = TRUE;
-        else if ( Config.MaxIllegal > 1 ) Config.MaxIllegal = 1;
-        else if ( Config.MaxIllegal < 0 ) Config.MaxIllegal = 0;
-        break;
-      case 'c':
-        FLAGS_configfile.set_value(tessoptarg);
-        break;
-      case 'D':
-        FLAGS_D.set_value(tessoptarg);
-        break;
-      case 'U':
-        FLAGS_U.set_value(tessoptarg);
-        break;
-      case 'O':
-        FLAGS_O.set_value(tessoptarg);
-        break;
-      case 'F':
-        FLAGS_F.set_value(tessoptarg);
-        break;
-      case 'X':
-        FLAGS_X.set_value(tessoptarg);
-        break;
-      case '?':
-        Error = TRUE;
-        break;
-    }
-    if (Error) {
-      fprintf(stderr, "Usage: %s %s\n", (*argv)[0], kUsage);
-      exit(2);
-    }
+void ParseArguments(int* argc, char ***argv) {
+  STRING usage;
+  if (*argc) {
+    usage += (*argv)[0];
+    usage += " -v | --version | ";
+    usage += (*argv)[0];
   }
-#endif
+  usage += " [.tr files ...]";
+  tesseract::ParseCommandLineFlags(usage.c_str(), argc, argv, true);
+}
+
+#else
+
+#include "allheaders.h"
+#include "ccutil.h"
+#include "classify.h"
+#include "cluster.h"
+#include "clusttool.h"
+#include "emalloc.h"
+#include "featdefs.h"
+#include "fontinfo.h"
+#include "intfeaturespace.h"
+#include "mastertrainer.h"
+#include "mf.h"
+#include "oldlist.h"
+#include "params.h"
+#include "shapetable.h"
+#include "tessdatamanager.h"
+#include "tessopt.h"
+#include "tprintf.h"
+#include "unicity_table.h"
+
+using tesseract::CCUtil;
+using tesseract::IntFeatureSpace;
+using tesseract::ParamUtils;
+using tesseract::ShapeTable;
+
+// Global Variables.
+
+// global variable to hold configuration parameters to control clustering
+// -M 0.625   -B 0.05   -I 1.0   -C 1e-6.
+CLUSTERCONFIG Config = { elliptical, 0.625, 0.05, 1.0, 1e-6, 0 };
+FEATURE_DEFS_STRUCT feature_defs;
+static CCUtil ccutil;
+
+INT_PARAM_FLAG(debug_level, 0, "Level of Trainer debugging");
+static INT_PARAM_FLAG(load_images, 0, "Load images with tr files");
+static STRING_PARAM_FLAG(configfile, "", "File to load more configs from");
+STRING_PARAM_FLAG(D, "", "Directory to write output files to");
+STRING_PARAM_FLAG(F, "font_properties", "File listing font properties");
+STRING_PARAM_FLAG(X, "", "File listing font xheights");
+STRING_PARAM_FLAG(U, "unicharset", "File to load unicharset from");
+STRING_PARAM_FLAG(O, "", "File to write unicharset to");
+STRING_PARAM_FLAG(output_trainer, "", "File to write trainer to");
+STRING_PARAM_FLAG(test_ch, "", "UTF8 test character string");
+static DOUBLE_PARAM_FLAG(clusterconfig_min_samples_fraction, Config.MinSamples,
+                         "Min number of samples per proto as % of total");
+static DOUBLE_PARAM_FLAG(clusterconfig_max_illegal, Config.MaxIllegal,
+                         "Max percentage of samples in a cluster which have more"
+                         " than 1 feature in that cluster");
+static DOUBLE_PARAM_FLAG(clusterconfig_independence, Config.Independence,
+                         "Desired independence between dimensions");
+static DOUBLE_PARAM_FLAG(clusterconfig_confidence, Config.Confidence,
+                         "Desired confidence in prototypes created");
+
+/**
+ * This routine parses the command line arguments that were
+ * passed to the program and uses them to set relevant
+ * training-related global parameters.
+ *
+ * Globals:
+ * - Config  current clustering parameters
+ * @param argc number of command line arguments to parse
+ * @param argv command line arguments
+ */
+void ParseArguments(int* argc, char ***argv) {
+  STRING usage;
+  if (*argc) {
+    usage += (*argv)[0];
+    usage += " -v | --version | ";
+    usage += (*argv)[0];
+  }
+  usage += " [.tr files ...]";
+  tesseract::ParseCommandLineFlags(usage.c_str(), argc, argv, true);
+  // Record the index of the first non-flag argument to 1, since we set
+  // remove_flags to true when parsing the flags.
+  tessoptind = 1;
+  // Set some global values based on the flags.
+  Config.MinSamples =
+          std::max(0.0, std::min(1.0, double(FLAGS_clusterconfig_min_samples_fraction)));
+  Config.MaxIllegal =
+          std::max(0.0, std::min(1.0, double(FLAGS_clusterconfig_max_illegal)));
+  Config.Independence =
+          std::max(0.0, std::min(1.0, double(FLAGS_clusterconfig_independence)));
+  Config.Confidence =
+          std::max(0.0, std::min(1.0, double(FLAGS_clusterconfig_confidence)));
   // Set additional parameters from config file if specified.
   if (!FLAGS_configfile.empty()) {
     tesseract::ParamUtils::ReadParamsFile(
@@ -175,21 +147,20 @@ void ParseArguments(int* argc, char ***argv) {
         tesseract::SET_PARAM_CONSTRAINT_NON_INIT_ONLY,
         ccutil.params());
   }
-}  // ParseArguments
+}
 
 namespace tesseract {
-
 // Helper loads shape table from the given file.
 ShapeTable* LoadShapeTable(const STRING& file_prefix) {
-  ShapeTable* shape_table = NULL;
+  ShapeTable* shape_table = nullptr;
   STRING shape_table_file = file_prefix;
   shape_table_file += kShapeTableFileSuffix;
-  FILE* shape_fp = fopen(shape_table_file.string(), "rb");
-  if (shape_fp != NULL) {
+  TFile shape_fp;
+  if (shape_fp.Open(shape_table_file.string(), nullptr)) {
     shape_table = new ShapeTable;
-    if (!shape_table->DeSerialize(false, shape_fp)) {
+    if (!shape_table->DeSerialize(&shape_fp)) {
       delete shape_table;
-      shape_table = NULL;
+      shape_table = nullptr;
       tprintf("Error: Failed to read shape table %s\n",
               shape_table_file.string());
     } else {
@@ -197,7 +168,6 @@ ShapeTable* LoadShapeTable(const STRING& file_prefix) {
       tprintf("Read shape table %s of %d shapes\n",
               shape_table_file.string(), num_shapes);
     }
-    fclose(shape_fp);
   } else {
     tprintf("Warning: No shape table file present: %s\n",
             shape_table_file.string());
@@ -210,7 +180,7 @@ void WriteShapeTable(const STRING& file_prefix, const ShapeTable& shape_table) {
   STRING shape_table_file = file_prefix;
   shape_table_file += kShapeTableFileSuffix;
   FILE* fp = fopen(shape_table_file.string(), "wb");
-  if (fp != NULL) {
+  if (fp != nullptr) {
     if (!shape_table.Serialize(fp)) {
       fprintf(stderr, "Error writing shape table: %s\n",
               shape_table_file.string());
@@ -222,19 +192,22 @@ void WriteShapeTable(const STRING& file_prefix, const ShapeTable& shape_table) {
   }
 }
 
-// Creates a MasterTraininer and loads the training data into it:
-// Initializes feature_defs and IntegerFX.
-// Loads the shape_table if shape_table != NULL.
-// Loads initial unicharset from -U command-line option.
-// If FLAGS_input_trainer is set, loads the majority of data from there, else:
-//   Loads font info from -F option.
-//   Loads xheights from -X option.
-//   Loads samples from .tr files in remaining command-line args.
-//   Deletes outliers and computes canonical samples.
-//   If FLAGS_output_trainer is set, saves the trainer for future use.
-// Computes canonical and cloud features.
-// If shape_table is not NULL, but failed to load, make a fake flat one,
-// as shape clustering was not run.
+/**
+ * Creates a MasterTrainer and loads the training data into it:
+ * Initializes feature_defs and IntegerFX.
+ * Loads the shape_table if shape_table != nullptr.
+ * Loads initial unicharset from -U command-line option.
+ * If FLAGS_T is set, loads the majority of data from there, else:
+ *  - Loads font info from -F option.
+ *  - Loads xheights from -X option.
+ *  - Loads samples from .tr files in remaining command-line args.
+ *  - Deletes outliers and computes canonical samples.
+ *  - If FLAGS_output_trainer is set, saves the trainer for future use.
+ *    TODO: Who uses that? There is currently no code which reads it.
+ * Computes canonical and cloud features.
+ * If shape_table is not nullptr, but failed to load, make a fake flat one,
+ * as shape clustering was not run.
+ */
 MasterTrainer* LoadTrainingData(int argc, const char* const * argv,
                                 bool replication,
                                 ShapeTable** shape_table,
@@ -246,15 +219,14 @@ MasterTrainer* LoadTrainingData(int argc, const char* const * argv,
     *file_prefix += FLAGS_D.c_str();
     *file_prefix += "/";
   }
-  // If we are shape clustering (NULL shape_table) or we successfully load
+  // If we are shape clustering (nullptr shape_table) or we successfully load
   // a shape_table written by a previous shape clustering, then
   // shape_analysis will be true, meaning that the MasterTrainer will replace
   // some members of the unicharset with their fragments.
   bool shape_analysis = false;
-  if (shape_table != NULL) {
+  if (shape_table != nullptr) {
     *shape_table = LoadShapeTable(*file_prefix);
-    if (*shape_table != NULL)
-      shape_analysis = true;
+    if (*shape_table != nullptr) shape_analysis = true;
   } else {
     shape_analysis = true;
   }
@@ -262,77 +234,56 @@ MasterTrainer* LoadTrainingData(int argc, const char* const * argv,
                                              shape_analysis,
                                              replication,
                                              FLAGS_debug_level);
-  if (FLAGS_input_trainer.empty()) {
-    trainer->LoadUnicharset(FLAGS_U.c_str());
-    // Get basic font information from font_properties.
-    if (!FLAGS_F.empty()) {
-      if (!trainer->LoadFontInfo(FLAGS_F.c_str())) {
-        delete trainer;
-        return NULL;
-      }
-    }
-    if (!FLAGS_X.empty()) {
-      if (!trainer->LoadXHeights(FLAGS_X.c_str())) {
-        delete trainer;
-        return NULL;
-      }
-    }
-    IntFeatureSpace fs;
-    fs.Init(kBoostXYBuckets, kBoostXYBuckets, kBoostDirBuckets);
-    trainer->SetFeatureSpace(fs);
-    const char* page_name;
-    // Load training data from .tr files on the command line.
-    while ((page_name = GetNextFilename(argc, argv)) != NULL) {
-      tprintf("Reading %s ...\n", page_name);
-      FILE* fp = Efopen(page_name, "rb");
-      trainer->ReadTrainingSamples(fp, feature_defs, false);
-      fclose(fp);
-
-      // If there is a file with [lang].[fontname].exp[num].fontinfo present,
-      // read font spacing information in to fontinfo_table.
-      int pagename_len = strlen(page_name);
-      char *fontinfo_file_name = new char[pagename_len + 7];
-      strncpy(fontinfo_file_name, page_name, pagename_len - 2);  // remove "tr"
-      strcpy(fontinfo_file_name + pagename_len - 2, "fontinfo");  // +"fontinfo"
-      trainer->AddSpacingInfo(fontinfo_file_name);
-      delete[] fontinfo_file_name;
-
-      // Load the images into memory if required by the classifier.
-      if (FLAGS_load_images) {
-        STRING image_name = page_name;
-        // Chop off the tr and replace with tif. Extension must be tif!
-        image_name.truncate_at(image_name.length() - 2);
-        image_name += "tif";
-        trainer->LoadPageImages(image_name.string());
-      }
-    }
-    trainer->PostLoadCleanup();
-    // Write the master trainer if required.
-    if (!FLAGS_output_trainer.empty()) {
-      FILE* fp = fopen(FLAGS_output_trainer.c_str(), "wb");
-      if (fp == NULL) {
-        tprintf("Can't create saved trainer data!\n");
-      } else {
-        trainer->Serialize(fp);
-        fclose(fp);
-      }
-    }
-  } else {
-    bool success = false;
-    tprintf("Loading master trainer from file:%s\n",
-            FLAGS_input_trainer.c_str());
-    FILE* fp = fopen(FLAGS_input_trainer.c_str(), "rb");
-    if (fp == NULL) {
-      tprintf("Can't read file %s to initialize master trainer\n",
-              FLAGS_input_trainer.c_str());
-    } else {
-      success = trainer->DeSerialize(false, fp);
-      fclose(fp);
-    }
-    if (!success) {
-      tprintf("Deserialize of master trainer failed!\n");
+  IntFeatureSpace fs;
+  fs.Init(kBoostXYBuckets, kBoostXYBuckets, kBoostDirBuckets);
+  trainer->LoadUnicharset(FLAGS_U.c_str());
+  // Get basic font information from font_properties.
+  if (!FLAGS_F.empty()) {
+    if (!trainer->LoadFontInfo(FLAGS_F.c_str())) {
       delete trainer;
-      return NULL;
+      return nullptr;
+    }
+  }
+  if (!FLAGS_X.empty()) {
+    if (!trainer->LoadXHeights(FLAGS_X.c_str())) {
+      delete trainer;
+      return nullptr;
+    }
+  }
+  trainer->SetFeatureSpace(fs);
+  const char* page_name;
+  // Load training data from .tr files on the command line.
+  while ((page_name = GetNextFilename(argc, argv)) != nullptr) {
+    tprintf("Reading %s ...\n", page_name);
+    trainer->ReadTrainingSamples(page_name, feature_defs, false);
+
+    // If there is a file with [lang].[fontname].exp[num].fontinfo present,
+    // read font spacing information in to fontinfo_table.
+    int pagename_len = strlen(page_name);
+    char* fontinfo_file_name = new char[pagename_len + 7];
+    strncpy(fontinfo_file_name, page_name, pagename_len - 2);   // remove "tr"
+    strcpy(fontinfo_file_name + pagename_len - 2, "fontinfo");  // +"fontinfo"
+    trainer->AddSpacingInfo(fontinfo_file_name);
+    delete[] fontinfo_file_name;
+
+    // Load the images into memory if required by the classifier.
+    if (FLAGS_load_images) {
+      STRING image_name = page_name;
+      // Chop off the tr and replace with tif. Extension must be tif!
+      image_name.truncate_at(image_name.length() - 2);
+      image_name += "tif";
+      trainer->LoadPageImages(image_name.string());
+    }
+  }
+  trainer->PostLoadCleanup();
+  // Write the master trainer if required.
+  if (!FLAGS_output_trainer.empty()) {
+    FILE* fp = fopen(FLAGS_output_trainer.c_str(), "wb");
+    if (fp == nullptr) {
+      tprintf("Can't create saved trainer data!\n");
+    } else {
+      trainer->Serialize(fp);
+      fclose(fp);
     }
   }
   trainer->PreTrainingSetup();
@@ -340,12 +291,12 @@ MasterTrainer* LoadTrainingData(int argc, const char* const * argv,
       !trainer->unicharset().save_to_file(FLAGS_O.c_str())) {
     fprintf(stderr, "Failed to save unicharset to file %s\n", FLAGS_O.c_str());
     delete trainer;
-    return NULL;
+    return nullptr;
   }
-  if (shape_table != NULL) {
+  if (shape_table != nullptr) {
     // If we previously failed to load a shapetable, then shape clustering
     // wasn't run so make a flat one now.
-    if (*shape_table == NULL) {
+    if (*shape_table == nullptr) {
       *shape_table = new ShapeTable;
       trainer->SetupFlatShapeTable(*shape_table);
       tprintf("Flat shape table summary: %s\n",
@@ -359,118 +310,94 @@ MasterTrainer* LoadTrainingData(int argc, const char* const * argv,
 }  // namespace tesseract.
 
 /*---------------------------------------------------------------------------*/
+/**
+ * This routine returns the next command line argument.  If
+ * there are no remaining command line arguments, it returns
+ * nullptr.  This routine should only be called after all option
+ * arguments have been parsed and removed with ParseArguments.
+ *
+ * Globals:
+ * - tessoptind defined by tessopt sys call
+ * @return Next command line argument or nullptr.
+ */
 const char *GetNextFilename(int argc, const char* const * argv) {
-  /*
-   **	Parameters: none
-   **	Globals:
-   **		tessoptind			defined by tessopt sys call
-   **	Operation:
-   **		This routine returns the next command line argument.  If
-   **		there are no remaining command line arguments, it returns
-   **		NULL.  This routine should only be called after all option
-   **		arguments have been parsed and removed with ParseArguments.
-   **	Return: Next command line argument or NULL.
-   **	Exceptions: none
-   **	History: Fri Aug 18 09:34:12 1989, DSJ, Created.
-   */
   if (tessoptind < argc)
     return argv[tessoptind++];
   else
-    return NULL;
-}	/* GetNextFilename */
-
-
+    return nullptr;
+} /* GetNextFilename */
 
 /*---------------------------------------------------------------------------*/
-LABELEDLIST FindList (
-    LIST	List,
-    char	*Label)
-
-/*
- **	Parameters:
- **		List		list to search
- **		Label		label to search for
- **	Globals: none
- **	Operation:
- **		This routine searches thru a list of labeled lists to find
- **		a list with the specified label.  If a matching labeled list
- **		cannot be found, NULL is returned.
- **	Return: Labeled list with the specified Label or NULL.
- **	Exceptions: none
- **	History: Fri Aug 18 15:57:41 1989, DSJ, Created.
+/**
+ * This routine searches through a list of labeled lists to find
+ * a list with the specified label.  If a matching labeled list
+ * cannot be found, nullptr is returned.
+ * @param List list to search
+ * @param Label label to search for
+ * @return Labeled list with the specified label or nullptr.
+ * @note Globals: none
  */
-
-{
-  LABELEDLIST	LabeledList;
+LABELEDLIST FindList(LIST List, char* Label) {
+  LABELEDLIST LabeledList;
 
   iterate (List)
   {
-    LabeledList = (LABELEDLIST) first_node (List);
+    LabeledList = reinterpret_cast<LABELEDLIST>first_node (List);
     if (strcmp (LabeledList->Label, Label) == 0)
       return (LabeledList);
   }
-  return (NULL);
+  return (nullptr);
 
-}	/* FindList */
+} /* FindList */
 
 /*---------------------------------------------------------------------------*/
-LABELEDLIST NewLabeledList (
-    const char	*Label)
-
-/*
- **	Parameters:
- **		Label	label for new list
- **	Globals: none
- **	Operation:
- **		This routine allocates a new, empty labeled list and gives
- **		it the specified label.
- **	Return: New, empty labeled list.
- **	Exceptions: none
- **	History: Fri Aug 18 16:08:46 1989, DSJ, Created.
+/**
+ * This routine allocates a new, empty labeled list and gives
+ * it the specified label.
+ * @param Label label for new list
+ * @return New, empty labeled list.
+ * @note Globals: none
  */
+LABELEDLIST NewLabeledList(const char* Label) {
+  LABELEDLIST LabeledList;
 
-{
-  LABELEDLIST	LabeledList;
-
-  LabeledList = (LABELEDLIST) Emalloc (sizeof (LABELEDLISTNODE));
-  LabeledList->Label = (char*)Emalloc (strlen (Label)+1);
+  LabeledList = static_cast<LABELEDLIST>(Emalloc (sizeof (LABELEDLISTNODE)));
+  LabeledList->Label = static_cast<char*>(Emalloc (strlen (Label)+1));
   strcpy (LabeledList->Label, Label);
   LabeledList->List = NIL_LIST;
   LabeledList->SampleCount = 0;
   LabeledList->font_sample_count = 0;
   return (LabeledList);
 
-}	/* NewLabeledList */
+} /* NewLabeledList */
 
 /*---------------------------------------------------------------------------*/
 // TODO(rays) This is now used only by cntraining. Convert cntraining to use
 // the new method or get rid of it entirely.
-void ReadTrainingSamples(const FEATURE_DEFS_STRUCT& feature_defs,
+/**
+ * This routine reads training samples from a file and
+ * places them into a data structure which organizes the
+ * samples by FontName and CharName.  It then returns this
+ * data structure.
+ * @param file open text file to read samples from
+ * @param feature_definitions
+ * @param feature_name
+ * @param max_samples
+ * @param unicharset
+ * @param training_samples
+ */
+void ReadTrainingSamples(const FEATURE_DEFS_STRUCT& feature_definitions,
                          const char *feature_name, int max_samples,
                          UNICHARSET* unicharset,
                          FILE* file, LIST* training_samples) {
-/*
-**  Parameters:
-**    file    open text file to read samples from
-**  Globals: none
-**  Operation:
-**    This routine reads training samples from a file and
-**    places them into a data structure which organizes the
-**    samples by FontName and CharName.  It then returns this
-**    data structure.
-**  Return: none
-**  Exceptions: none
-**  History: Fri Aug 18 13:11:39 1989, DSJ, Created.
-**       Tue May 17 1998 simplifications to structure, illiminated
-**        font, and feature specification levels of structure.
-*/
   char    buffer[2048];
   char    unichar[UNICHAR_LEN + 1];
   LABELEDLIST char_sample;
   FEATURE_SET feature_samples;
   CHAR_DESC char_desc;
-  int   i;
-  int feature_type = ShortNameToFeatureType(feature_defs, feature_name);
+  uint32_t feature_type =
+    ShortNameToFeatureType(feature_definitions, feature_name);
+
   // Zero out the font_sample_count for all the classes.
   LIST it = *training_samples;
   iterate(it) {
@@ -478,12 +405,12 @@ void ReadTrainingSamples(const FEATURE_DEFS_STRUCT& feature_defs,
     char_sample->font_sample_count = 0;
   }
 
-  while (fgets(buffer, 2048, file) != NULL) {
+  while (fgets(buffer, 2048, file) != nullptr) {
     if (buffer[0] == '\n')
       continue;
 
     sscanf(buffer, "%*s %s", unichar);
-    if (unicharset != NULL && !unicharset->contains_unichar(unichar)) {
+    if (unicharset != nullptr && !unicharset->contains_unichar(unichar)) {
       unicharset->unichar_insert(unichar);
       if (unicharset->size() > MAX_NUM_CLASSES) {
         tprintf("Error: Size of unicharset in training is "
@@ -492,11 +419,11 @@ void ReadTrainingSamples(const FEATURE_DEFS_STRUCT& feature_defs,
       }
     }
     char_sample = FindList(*training_samples, unichar);
-    if (char_sample == NULL) {
+    if (char_sample == nullptr) {
       char_sample = NewLabeledList(unichar);
       *training_samples = push(*training_samples, char_sample);
     }
-    char_desc = ReadCharDescription(feature_defs, file);
+    char_desc = ReadCharDescription(feature_definitions, file);
     feature_samples = char_desc->FeatureSets[feature_type];
     if (char_sample->font_sample_count < max_samples || max_samples <= 0) {
       char_sample->List = push(char_sample->List, feature_samples);
@@ -505,7 +432,7 @@ void ReadTrainingSamples(const FEATURE_DEFS_STRUCT& feature_defs,
     } else {
       FreeFeatureSet(feature_samples);
     }
-    for (i = 0; i < char_desc->NumFeatureSets; i++) {
+    for (size_t i = 0; i < char_desc->NumFeatureSets; i++) {
       if (feature_type != i)
         FreeFeatureSet(char_desc->FeatureSets[i]);
     }
@@ -515,133 +442,117 @@ void ReadTrainingSamples(const FEATURE_DEFS_STRUCT& feature_defs,
 
 
 /*---------------------------------------------------------------------------*/
-void FreeTrainingSamples(LIST CharList) {
-/*
- **	Parameters:
- **		FontList	list of all fonts in document
- **	Globals: none
- **	Operation:
- **		This routine deallocates all of the space allocated to
- **		the specified list of training samples.
- **	Return: none
- **	Exceptions: none
- **	History: Fri Aug 18 17:44:27 1989, DSJ, Created.
+/**
+ * This routine deallocates all of the space allocated to
+ * the specified list of training samples.
+ * @param CharList list of all fonts in document
  */
+void FreeTrainingSamples(LIST CharList) {
   LABELEDLIST char_sample;
   FEATURE_SET FeatureSet;
   LIST FeatureList;
 
-
-  iterate(CharList) {  /* iterate thru all of the fonts */
-    char_sample = (LABELEDLIST) first_node(CharList);
+  LIST nodes = CharList;
+  iterate(CharList) { /* iterate through all of the fonts */
+    char_sample = reinterpret_cast<LABELEDLIST>first_node(CharList);
     FeatureList = char_sample->List;
-    iterate(FeatureList) {  /* iterate thru all of the classes */
-      FeatureSet = (FEATURE_SET) first_node(FeatureList);
+    iterate(FeatureList) { /* iterate through all of the classes */
+      FeatureSet = reinterpret_cast<FEATURE_SET>first_node(FeatureList);
       FreeFeatureSet(FeatureSet);
     }
     FreeLabeledList(char_sample);
   }
-  destroy(CharList);
+  destroy(nodes);
 }  /* FreeTrainingSamples */
 
 /*---------------------------------------------------------------------------*/
-void FreeLabeledList(LABELEDLIST LabeledList) {
-/*
- **	Parameters:
- **		LabeledList	labeled list to be freed
- **	Globals: none
- **	Operation:
- **		This routine deallocates all of the memory consumed by
- **		a labeled list.  It does not free any memory which may be
- **		consumed by the items in the list.
- **	Return: none
- **	Exceptions: none
- **	History: Fri Aug 18 17:52:45 1989, DSJ, Created.
+/**
+ * This routine deallocates all of the memory consumed by
+ * a labeled list.  It does not free any memory which may be
+ * consumed by the items in the list.
+ * @param LabeledList labeled list to be freed
+ * @note Globals: none
  */
+void FreeLabeledList(LABELEDLIST LabeledList) {
   destroy(LabeledList->List);
   free(LabeledList->Label);
   free(LabeledList);
 }  /* FreeLabeledList */
 
 /*---------------------------------------------------------------------------*/
+/**
+ * This routine reads samples from a LABELEDLIST and enters
+ * those samples into a clusterer data structure.  This
+ * data structure is then returned to the caller.
+ * @param char_sample: LABELEDLIST that holds all the feature information for a
+ * @param FeatureDefs
+ * @param program_feature_type
+ * given character.
+ * @return Pointer to new clusterer data structure.
+ * @note Globals: None
+ */
 CLUSTERER *SetUpForClustering(const FEATURE_DEFS_STRUCT &FeatureDefs,
                               LABELEDLIST char_sample,
                               const char* program_feature_type) {
-/*
- **	Parameters:
- **		char_sample: LABELEDLIST that holds all the feature information for a
- **		given character.
- **	Globals:
- **		None
- **	Operation:
- **		This routine reads samples from a LABELEDLIST and enters
- **		those samples into a clusterer data structure.  This
- **		data structure is then returned to the caller.
- **	Return:
- **		Pointer to new clusterer data structure.
- **	Exceptions:
- **		None
- **	History:
- **		8/16/89, DSJ, Created.
- */
-  uinT16 N;
+  uint16_t N;
   int i, j;
-  FLOAT32 *Sample = NULL;
+  float* Sample = nullptr;
   CLUSTERER *Clusterer;
-  inT32 CharID;
-  LIST FeatureList = NULL;
-  FEATURE_SET FeatureSet = NULL;
+  int32_t CharID;
+  LIST FeatureList = nullptr;
+  FEATURE_SET FeatureSet = nullptr;
 
-  int desc_index = ShortNameToFeatureType(FeatureDefs, program_feature_type);
+  int32_t desc_index =
+      ShortNameToFeatureType(FeatureDefs, program_feature_type);
   N = FeatureDefs.FeatureDesc[desc_index]->NumParams;
   Clusterer = MakeClusterer(N, FeatureDefs.FeatureDesc[desc_index]->ParamDesc);
 
   FeatureList = char_sample->List;
   CharID = 0;
   iterate(FeatureList) {
-    FeatureSet = (FEATURE_SET) first_node(FeatureList);
+    FeatureSet = reinterpret_cast<FEATURE_SET>first_node(FeatureList);
     for (i = 0; i < FeatureSet->MaxNumFeatures; i++) {
-      if (Sample == NULL)
-        Sample = (FLOAT32 *)Emalloc(N * sizeof(FLOAT32));
+      if (Sample == nullptr) Sample = static_cast<float*>(Emalloc(N * sizeof(float)));
       for (j = 0; j < N; j++)
         Sample[j] = FeatureSet->Features[i]->Params[j];
       MakeSample (Clusterer, Sample, CharID);
     }
     CharID++;
   }
-  if ( Sample != NULL ) free( Sample );
-  return( Clusterer );
+  free(Sample);
+  return Clusterer;
 
-}	/* SetUpForClustering */
+} /* SetUpForClustering */
 
 /*------------------------------------------------------------------------*/
 void MergeInsignificantProtos(LIST ProtoList, const char* label,
-                              CLUSTERER	*Clusterer, CLUSTERCONFIG *Config) {
-  PROTOTYPE	*Prototype;
+                              CLUSTERER* Clusterer,
+                              CLUSTERCONFIG* clusterconfig) {
+  PROTOTYPE* Prototype;
   bool debug = strcmp(FLAGS_test_ch.c_str(), label) == 0;
 
   LIST pProtoList = ProtoList;
   iterate(pProtoList) {
-    Prototype = (PROTOTYPE *) first_node (pProtoList);
+    Prototype = reinterpret_cast<PROTOTYPE *>first_node (pProtoList);
     if (Prototype->Significant || Prototype->Merged)
       continue;
-    FLOAT32 best_dist = 0.125;
-    PROTOTYPE* best_match = NULL;
+    float best_dist = 0.125;
+    PROTOTYPE* best_match = nullptr;
     // Find the nearest alive prototype.
     LIST list_it = ProtoList;
     iterate(list_it) {
-      PROTOTYPE* test_p = (PROTOTYPE *) first_node (list_it);
+      PROTOTYPE* test_p = reinterpret_cast<PROTOTYPE *>first_node (list_it);
       if (test_p != Prototype && !test_p->Merged) {
-        FLOAT32 dist = ComputeDistance(Clusterer->SampleSize,
-                                       Clusterer->ParamDesc,
-                                       Prototype->Mean, test_p->Mean);
+        float dist = ComputeDistance(Clusterer->SampleSize,
+                                     Clusterer->ParamDesc,
+                                     Prototype->Mean, test_p->Mean);
         if (dist < best_dist) {
           best_match = test_p;
           best_dist = dist;
         }
       }
     }
-    if (best_match != NULL && !best_match->Significant) {
+    if (best_match != nullptr && !best_match->Significant) {
       if (debug)
         tprintf("Merging red clusters (%d+%d) at %g,%g and %g,%g\n",
                 best_match->NumSamples, Prototype->NumSamples,
@@ -654,20 +565,21 @@ void MergeInsignificantProtos(LIST ProtoList, const char* label,
                                              best_match->Mean,
                                              best_match->Mean, Prototype->Mean);
       Prototype->NumSamples = 0;
-      Prototype->Merged = 1;
-    } else if (best_match != NULL) {
+      Prototype->Merged = true;
+    } else if (best_match != nullptr) {
       if (debug)
         tprintf("Red proto at %g,%g matched a green one at %g,%g\n",
                 Prototype->Mean[0], Prototype->Mean[1],
                 best_match->Mean[0], best_match->Mean[1]);
-      Prototype->Merged = 1;
+      Prototype->Merged = true;
     }
   }
   // Mark significant those that now have enough samples.
-  int min_samples = (inT32) (Config->MinSamples * Clusterer->NumChar);
+  int min_samples =
+    static_cast<int32_t>(clusterconfig->MinSamples * Clusterer->NumChar);
   pProtoList = ProtoList;
   iterate(pProtoList) {
-    Prototype = (PROTOTYPE *) first_node (pProtoList);
+    Prototype = reinterpret_cast<PROTOTYPE *>first_node (pProtoList);
     // Process insignificant protos that do not match a green one
     if (!Prototype->Significant && Prototype->NumSamples >= min_samples &&
         !Prototype->Merged) {
@@ -677,7 +589,7 @@ void MergeInsignificantProtos(LIST ProtoList, const char* label,
       Prototype->Significant = true;
     }
   }
-}	/* MergeInsignificantProtos */
+} /* MergeInsignificantProtos */
 
 /*-----------------------------------------------------------------------------*/
 void CleanUpUnusedData(
@@ -687,30 +599,21 @@ void CleanUpUnusedData(
 
   iterate(ProtoList)
   {
-    Prototype = (PROTOTYPE *) first_node (ProtoList);
-    if(Prototype->Variance.Elliptical != NULL)
-    {
-      memfree(Prototype->Variance.Elliptical);
-      Prototype->Variance.Elliptical = NULL;
-    }
-    if(Prototype->Magnitude.Elliptical != NULL)
-    {
-      memfree(Prototype->Magnitude.Elliptical);
-      Prototype->Magnitude.Elliptical = NULL;
-    }
-    if(Prototype->Weight.Elliptical != NULL)
-    {
-      memfree(Prototype->Weight.Elliptical);
-      Prototype->Weight.Elliptical = NULL;
-    }
+    Prototype = reinterpret_cast<PROTOTYPE *>first_node (ProtoList);
+    free(Prototype->Variance.Elliptical);
+    Prototype->Variance.Elliptical = nullptr;
+    free(Prototype->Magnitude.Elliptical);
+    Prototype->Magnitude.Elliptical = nullptr;
+    free(Prototype->Weight.Elliptical);
+    Prototype->Weight.Elliptical = nullptr;
   }
 }
 
 /*------------------------------------------------------------------------*/
 LIST RemoveInsignificantProtos(
     LIST ProtoList,
-    BOOL8 KeepSigProtos,
-    BOOL8 KeepInsigProtos,
+    bool KeepSigProtos,
+    bool KeepInsigProtos,
     int N)
 
 {
@@ -723,47 +626,44 @@ LIST RemoveInsignificantProtos(
   pProtoList = ProtoList;
   iterate(pProtoList)
   {
-    Proto = (PROTOTYPE *) first_node (pProtoList);
+    Proto = reinterpret_cast<PROTOTYPE *>first_node (pProtoList);
     if ((Proto->Significant && KeepSigProtos) ||
         (!Proto->Significant && KeepInsigProtos))
     {
-      NewProto = (PROTOTYPE *)Emalloc(sizeof(PROTOTYPE));
+      NewProto = static_cast<PROTOTYPE *>(Emalloc(sizeof(PROTOTYPE)));
 
-      NewProto->Mean = (FLOAT32 *)Emalloc(N * sizeof(FLOAT32));
+      NewProto->Mean = static_cast<float *>(Emalloc(N * sizeof(float)));
       NewProto->Significant = Proto->Significant;
       NewProto->Style = Proto->Style;
       NewProto->NumSamples = Proto->NumSamples;
-      NewProto->Cluster = NULL;
-      NewProto->Distrib = NULL;
+      NewProto->Cluster = nullptr;
+      NewProto->Distrib = nullptr;
 
       for (i=0; i < N; i++)
         NewProto->Mean[i] = Proto->Mean[i];
-      if (Proto->Variance.Elliptical != NULL)
-      {
-        NewProto->Variance.Elliptical = (FLOAT32 *)Emalloc(N * sizeof(FLOAT32));
+      if (Proto->Variance.Elliptical != nullptr) {
+        NewProto->Variance.Elliptical = static_cast<float *>(Emalloc(N * sizeof(float)));
         for (i=0; i < N; i++)
           NewProto->Variance.Elliptical[i] = Proto->Variance.Elliptical[i];
       }
       else
-        NewProto->Variance.Elliptical = NULL;
+        NewProto->Variance.Elliptical = nullptr;
       //---------------------------------------------
-      if (Proto->Magnitude.Elliptical != NULL)
-      {
-        NewProto->Magnitude.Elliptical = (FLOAT32 *)Emalloc(N * sizeof(FLOAT32));
+      if (Proto->Magnitude.Elliptical != nullptr) {
+        NewProto->Magnitude.Elliptical = static_cast<float *>(Emalloc(N * sizeof(float)));
         for (i=0; i < N; i++)
           NewProto->Magnitude.Elliptical[i] = Proto->Magnitude.Elliptical[i];
       }
       else
-        NewProto->Magnitude.Elliptical = NULL;
+        NewProto->Magnitude.Elliptical = nullptr;
       //------------------------------------------------
-      if (Proto->Weight.Elliptical != NULL)
-      {
-        NewProto->Weight.Elliptical = (FLOAT32 *)Emalloc(N * sizeof(FLOAT32));
+      if (Proto->Weight.Elliptical != nullptr) {
+        NewProto->Weight.Elliptical = static_cast<float *>(Emalloc(N * sizeof(float)));
         for (i=0; i < N; i++)
           NewProto->Weight.Elliptical[i] = Proto->Weight.Elliptical[i];
       }
       else
-        NewProto->Weight.Elliptical = NULL;
+        NewProto->Weight.Elliptical = nullptr;
 
       NewProto->TotalMagnitude = Proto->TotalMagnitude;
       NewProto->LogMagnitude = Proto->LogMagnitude;
@@ -772,98 +672,84 @@ LIST RemoveInsignificantProtos(
   }
   FreeProtoList(&ProtoList);
   return (NewProtoList);
-}	/* RemoveInsignificantProtos */
+} /* RemoveInsignificantProtos */
 
 /*----------------------------------------------------------------------------*/
-MERGE_CLASS FindClass (
-    LIST	List,
-    const char	*Label)
-{
-  MERGE_CLASS	MergeClass;
+MERGE_CLASS FindClass(LIST List, const char* Label) {
+  MERGE_CLASS MergeClass;
 
   iterate (List)
   {
-    MergeClass = (MERGE_CLASS) first_node (List);
+    MergeClass = reinterpret_cast<MERGE_CLASS>first_node (List);
     if (strcmp (MergeClass->Label, Label) == 0)
       return (MergeClass);
   }
-  return (NULL);
+  return (nullptr);
 
-}	/* FindClass */
+} /* FindClass */
 
 /*---------------------------------------------------------------------------*/
-MERGE_CLASS NewLabeledClass (
-    const char	*Label)
-{
-  MERGE_CLASS	MergeClass;
+MERGE_CLASS NewLabeledClass(const char* Label) {
+  MERGE_CLASS MergeClass;
 
   MergeClass = new MERGE_CLASS_NODE;
-  MergeClass->Label = (char*)Emalloc (strlen (Label)+1);
+  MergeClass->Label = static_cast<char*>(Emalloc (strlen (Label)+1));
   strcpy (MergeClass->Label, Label);
   MergeClass->Class = NewClass (MAX_NUM_PROTOS, MAX_NUM_CONFIGS);
   return (MergeClass);
 
-}	/* NewLabeledClass */
+} /* NewLabeledClass */
 
 /*-----------------------------------------------------------------------------*/
-void FreeLabeledClassList (
-    LIST	ClassList)
-
-/*
- **	Parameters:
- **		FontList	list of all fonts in document
- **	Globals: none
- **	Operation:
- **		This routine deallocates all of the space allocated to
- **		the specified list of training samples.
- **	Return: none
- **	Exceptions: none
- **	History: Fri Aug 18 17:44:27 1989, DSJ, Created.
+/**
+ * This routine deallocates all of the space allocated to
+ * the specified list of training samples.
+ * @param ClassList list of all fonts in document
  */
+void FreeLabeledClassList(LIST ClassList) {
+  MERGE_CLASS MergeClass;
 
-{
-  MERGE_CLASS	MergeClass;
-
-  iterate (ClassList) 		/* iterate thru all of the fonts */
+  LIST nodes = ClassList;
+  iterate(ClassList) /* iterate through all of the fonts */
   {
-    MergeClass = (MERGE_CLASS) first_node (ClassList);
+    MergeClass = reinterpret_cast<MERGE_CLASS>first_node (ClassList);
     free (MergeClass->Label);
     FreeClass(MergeClass->Class);
     delete MergeClass;
   }
-  destroy (ClassList);
+  destroy(nodes);
 
-}	/* FreeLabeledClassList */
+} /* FreeLabeledClassList */
 
-/** SetUpForFloat2Int **************************************************/
+/* SetUpForFloat2Int */
 CLASS_STRUCT* SetUpForFloat2Int(const UNICHARSET& unicharset,
                                 LIST LabeledClassList) {
-  MERGE_CLASS	MergeClass;
-  CLASS_TYPE		Class;
-  int				NumProtos;
-  int				NumConfigs;
-  int				NumWords;
-  int				i, j;
-  float			Values[3];
-  PROTO			NewProto;
-  PROTO			OldProto;
-  BIT_VECTOR		NewConfig;
-  BIT_VECTOR		OldConfig;
+  MERGE_CLASS MergeClass;
+  CLASS_TYPE Class;
+  int NumProtos;
+  int NumConfigs;
+  int NumWords;
+  int i, j;
+  float Values[3];
+  PROTO NewProto;
+  PROTO OldProto;
+  BIT_VECTOR NewConfig;
+  BIT_VECTOR OldConfig;
 
-  // 	printf("Float2Int ...\n");
+  //  printf("Float2Int ...\n");
 
   CLASS_STRUCT* float_classes = new CLASS_STRUCT[unicharset.size()];
   iterate(LabeledClassList)
   {
     UnicityTableEqEq<int>   font_set;
-    MergeClass = (MERGE_CLASS) first_node (LabeledClassList);
+    MergeClass = reinterpret_cast<MERGE_CLASS>first_node (LabeledClassList);
     Class = &float_classes[unicharset.unichar_to_id(MergeClass->Label)];
     NumProtos = MergeClass->Class->NumProtos;
     NumConfigs = MergeClass->Class->NumConfigs;
     font_set.move(&MergeClass->Class->font_set);
     Class->NumProtos = NumProtos;
     Class->MaxNumProtos = NumProtos;
-    Class->Prototypes = (PROTO) Emalloc (sizeof(PROTO_STRUCT) * NumProtos);
+    Class->Prototypes = static_cast<PROTO>(Emalloc (sizeof(PROTO_STRUCT) * NumProtos));
     for(i=0; i < NumProtos; i++)
     {
       NewProto = ProtoIn(Class, i);
@@ -884,7 +770,7 @@ CLASS_STRUCT* SetUpForFloat2Int(const UNICHARSET& unicharset,
     Class->NumConfigs = NumConfigs;
     Class->MaxNumConfigs = NumConfigs;
     Class->font_set.move(&font_set);
-    Class->Configurations = (BIT_VECTOR*) Emalloc (sizeof(BIT_VECTOR) * NumConfigs);
+    Class->Configurations = static_cast<BIT_VECTOR*>(Emalloc (sizeof(BIT_VECTOR) * NumConfigs));
     NumWords = WordsInVectorOfSize(NumProtos);
     for(i=0; i < NumConfigs; i++)
     {
@@ -902,11 +788,11 @@ CLASS_STRUCT* SetUpForFloat2Int(const UNICHARSET& unicharset,
 void Normalize (
     float  *Values)
 {
-  register float Slope;
-  register float Intercept;
-  register float Normalizer;
+  float Slope;
+  float Intercept;
+  float Normalizer;
 
-  Slope      = tan (Values [2] * 2 * PI);
+  Slope      = tan(Values [2] * 2 * M_PI);
   Intercept  = Values [1] - Slope * Values [0];
   Normalizer = 1 / sqrt (Slope * Slope + 1.0);
 
@@ -916,20 +802,20 @@ void Normalize (
 } // Normalize
 
 /*-------------------------------------------------------------------------*/
-void FreeNormProtoList (
-    LIST	CharList)
+void FreeNormProtoList(LIST CharList)
 
 {
-  LABELEDLIST	char_sample;
+  LABELEDLIST char_sample;
 
-  iterate (CharList) 		/* iterate thru all of the fonts */
+  LIST nodes = CharList;
+  iterate(CharList) /* iterate through all of the fonts */
   {
-    char_sample = (LABELEDLIST) first_node (CharList);
+    char_sample = reinterpret_cast<LABELEDLIST>first_node (CharList);
     FreeLabeledList (char_sample);
   }
-  destroy (CharList);
+  destroy(nodes);
 
-}	// FreeNormProtoList
+}  // FreeNormProtoList
 
 /*---------------------------------------------------------------------------*/
 void AddToNormProtosList(
@@ -943,27 +829,24 @@ void AddToNormProtosList(
   LabeledProtoList = NewLabeledList(CharName);
   iterate(ProtoList)
   {
-    Proto = (PROTOTYPE *) first_node (ProtoList);
+    Proto = reinterpret_cast<PROTOTYPE *>first_node (ProtoList);
     LabeledProtoList->List = push(LabeledProtoList->List, Proto);
   }
   *NormProtoList = push(*NormProtoList, LabeledProtoList);
 }
 
 /*---------------------------------------------------------------------------*/
-int NumberOfProtos(
-    LIST ProtoList,
-    BOOL8	CountSigProtos,
-    BOOL8	CountInsigProtos)
-{
+int NumberOfProtos(LIST ProtoList, bool CountSigProtos,
+                   bool CountInsigProtos) {
   int N = 0;
-  PROTOTYPE	*Proto;
-
   iterate(ProtoList)
   {
-    Proto = (PROTOTYPE *) first_node ( ProtoList );
-    if (( Proto->Significant && CountSigProtos )	||
-        ( ! Proto->Significant && CountInsigProtos ) )
+    PROTOTYPE* Proto = reinterpret_cast<PROTOTYPE*>first_node(ProtoList);
+    if ((Proto->Significant && CountSigProtos) ||
+        (!Proto->Significant && CountInsigProtos))
       N++;
   }
   return(N);
 }
+
+#endif  // def DISABLED_LEGACY_ENGINE

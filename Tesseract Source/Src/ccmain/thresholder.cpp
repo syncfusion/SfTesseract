@@ -1,8 +1,7 @@
 ///////////////////////////////////////////////////////////////////////
 // File:        thresholder.cpp
-// Description: Base API for thresolding images in tesseract.
+// Description: Base API for thresholding images in tesseract.
 // Author:      Ray Smith
-// Created:     Mon May 12 11:28:15 PDT 2008
 //
 // (C) Copyright 2008, Google Inc.
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,18 +20,22 @@
 
 #include "thresholder.h"
 
-#include <string.h>
+#include <cstdint>      // for uint32_t
+#include <cstring>
 
-#include "img.h"
 #include "otsuthr.h"
+#include "tprintf.h"    // for tprintf
+
+#if defined(USE_OPENCL)
+#include "openclwrapper.h" // for OpenclDevice
+#endif
 
 namespace tesseract {
 
 ImageThresholder::ImageThresholder()
-  : pix_(NULL),
-    image_data_(NULL),
+  : pix_(nullptr),
     image_width_(0), image_height_(0),
-    image_bytespp_(0), image_bytespl_(0),
+    pix_channels_(0), pix_wpl_(0),
     scale_(1), yres_(300), estimated_res_(300) {
   SetRectangle(0, 0, 0, 0);
 }
@@ -43,24 +46,16 @@ ImageThresholder::~ImageThresholder() {
 
 // Destroy the Pix if there is one, freeing memory.
 void ImageThresholder::Clear() {
-  if (pix_ != NULL) {
-    pixDestroy(&pix_);
-    pix_ = NULL;
-  }
-  image_data_ = NULL;
+  pixDestroy(&pix_);
 }
 
 // Return true if no image has been set.
 bool ImageThresholder::IsEmpty() const {
-  if (pix_ != NULL)
-    return false;
-  return image_data_ == NULL;
+  return pix_ == nullptr;
 }
 
-// SetImage makes a copy of only the metadata, not the underlying
-// image buffer. It promises to treat the source as read-only in either case,
-// but in return assumes that the Pix or image buffer remain valid
-// throughout the life of the ImageThresholder.
+// SetImage makes a copy of all the image data, so it may be deleted
+// immediately after this call.
 // Greyscale of 8 and color of 24 or 32 bits per pixel may be given.
 // Palette color images will not work properly and must be converted to
 // 24 bit.
@@ -70,17 +65,57 @@ bool ImageThresholder::IsEmpty() const {
 void ImageThresholder::SetImage(const unsigned char* imagedata,
                                 int width, int height,
                                 int bytes_per_pixel, int bytes_per_line) {
-  if (pix_ != NULL)
-    pixDestroy(&pix_);
-  pix_ = NULL;
-  image_data_ = imagedata;
-  image_width_ = width;
-  image_height_ = height;
-  image_bytespp_ = bytes_per_pixel;
-  image_bytespl_ = bytes_per_line;
-  scale_ = 1;
-  estimated_res_ = yres_ = 300;
-  Init();
+  int bpp = bytes_per_pixel * 8;
+  if (bpp == 0) bpp = 1;
+  Pix* pix = pixCreate(width, height, bpp == 24 ? 32 : bpp);
+  l_uint32* data = pixGetData(pix);
+  int wpl = pixGetWpl(pix);
+  switch (bpp) {
+  case 1:
+    for (int y = 0; y < height; ++y, data += wpl, imagedata += bytes_per_line) {
+      for (int x = 0; x < width; ++x) {
+        if (imagedata[x / 8] & (0x80 >> (x % 8)))
+          CLEAR_DATA_BIT(data, x);
+        else
+          SET_DATA_BIT(data, x);
+      }
+    }
+    break;
+
+  case 8:
+    // Greyscale just copies the bytes in the right order.
+    for (int y = 0; y < height; ++y, data += wpl, imagedata += bytes_per_line) {
+      for (int x = 0; x < width; ++x)
+        SET_DATA_BYTE(data, x, imagedata[x]);
+    }
+    break;
+
+  case 24:
+    // Put the colors in the correct places in the line buffer.
+    for (int y = 0; y < height; ++y, imagedata += bytes_per_line) {
+      for (int x = 0; x < width; ++x, ++data) {
+        SET_DATA_BYTE(data, COLOR_RED, imagedata[3 * x]);
+        SET_DATA_BYTE(data, COLOR_GREEN, imagedata[3 * x + 1]);
+        SET_DATA_BYTE(data, COLOR_BLUE, imagedata[3 * x + 2]);
+      }
+    }
+    break;
+
+  case 32:
+    // Maintain byte order consistency across different endianness.
+    for (int y = 0; y < height; ++y, imagedata += bytes_per_line, data += wpl) {
+      for (int x = 0; x < width; ++x) {
+        data[x] = (imagedata[x * 4] << 24) | (imagedata[x * 4 + 1] << 16) |
+                  (imagedata[x * 4 + 2] << 8) | imagedata[x * 4 + 3];
+      }
+    }
+    break;
+
+  default:
+    tprintf("Cannot convert RAW image to Pix with bpp = %d\n", bpp);
+  }
+  SetImage(pix);
+  pixDestroy(&pix);
 }
 
 // Store the coordinates of the rectangle to process for later use.
@@ -107,66 +142,85 @@ void ImageThresholder::GetImageSizes(int* left, int* top,
   *imageheight = image_height_;
 }
 
-// NOTE: Opposite to SetImage for raw images, SetImage for Pix clones its
-// input, so the source pix may be pixDestroyed immediately after.
+// Pix vs raw, which to use? Pix is the preferred input for efficiency,
+// since raw buffers are copied.
+// SetImage for Pix clones its input, so the source pix may be pixDestroyed
+// immediately after, but may not go away until after the Thresholder has
+// finished with it.
 void ImageThresholder::SetImage(const Pix* pix) {
-  image_data_ = NULL;
-  if (pix_ != NULL)
+  if (pix_ != nullptr)
     pixDestroy(&pix_);
   Pix* src = const_cast<Pix*>(pix);
   int depth;
   pixGetDimensions(src, &image_width_, &image_height_, &depth);
   // Convert the image as necessary so it is one of binary, plain RGB, or
-  // 8 bit with no colormap.
-  if (depth > 1 && depth < 8) {
+  // 8 bit with no colormap. Guarantee that we always end up with our own copy,
+  // not just a clone of the input.
+  if (pixGetColormap(src)) {
+    Pix* tmp = pixRemoveColormap(src, REMOVE_CMAP_BASED_ON_SRC);
+    depth = pixGetDepth(tmp);
+    if (depth > 1 && depth < 8) {
+      pix_ = pixConvertTo8(tmp, false);
+      pixDestroy(&tmp);
+    } else {
+      pix_ = tmp;
+    }
+  } else if (depth > 1 && depth < 8) {
     pix_ = pixConvertTo8(src, false);
-  } else if (pixGetColormap(src)) {
-    pix_ = pixRemoveColormap(src, REMOVE_CMAP_BASED_ON_SRC);
   } else {
-    pix_ = pixClone(src);
+    pix_ = pixCopy(nullptr, src);
   }
   depth = pixGetDepth(pix_);
-  image_bytespp_ = depth / 8;
-  image_bytespl_ = pixGetWpl(pix_) * sizeof(l_uint32);
+  pix_channels_ = depth / 8;
+  pix_wpl_ = pixGetWpl(pix_);
   scale_ = 1;
-  estimated_res_ = yres_ = pixGetYRes(src);
+  estimated_res_ = yres_ = pixGetYRes(pix_);
   Init();
 }
 
 // Threshold the source image as efficiently as possible to the output Pix.
 // Creates a Pix and sets pix to point to the resulting pointer.
 // Caller must use pixDestroy to free the created Pix.
-void ImageThresholder::ThresholdToPix(Pix** pix) {
-  if (pix_ != NULL) {
-    if (image_bytespp_ == 0) {
-      // We have a binary image, so it just has to be cloned.
-      *pix = GetPixRect();
-    } else {
-      if (image_bytespp_ == 4) {
-        // Color data can just be passed direct.
-        const uinT32* data = pixGetData(pix_);
-        OtsuThresholdRectToPix(reinterpret_cast<const uinT8*>(data),
-                               image_bytespp_, image_bytespl_, pix);
-      } else {
-        // Convert 8-bit to IMAGE and then pass its
-        // buffer to the raw interface to complete the conversion.
-        IMAGE temp_image;
-        temp_image.FromPix(pix_);
-        OtsuThresholdRectToPix(temp_image.get_buffer(),
-                               image_bytespp_,
-                               COMPUTE_IMAGE_XDIM(temp_image.get_xsize(),
-                                                  temp_image.get_bpp()),
-                               pix);
-      }
-    }
-    return;
+/// Returns false on error.
+bool ImageThresholder::ThresholdToPix(PageSegMode pageseg_mode, Pix** pix) {
+  if (image_width_ > INT16_MAX || image_height_ > INT16_MAX) {
+    tprintf("Image too large: (%d, %d)\n", image_width_, image_height_);
+    return false;
   }
-  if (image_bytespp_ > 0) {
-    // Threshold grey or color.
-    OtsuThresholdRectToPix(image_data_, image_bytespp_, image_bytespl_, pix);
+  if (pix_channels_ == 0) {
+    // We have a binary image, but it still has to be copied, as this API
+    // allows the caller to modify the output.
+    Pix* original = GetPixRect();
+    *pix = pixCopy(nullptr, original);
+    pixDestroy(&original);
   } else {
-    RawRectToPix(pix);
+    OtsuThresholdRectToPix(pix_, pix);
   }
+  return true;
+}
+
+// Gets a pix that contains an 8 bit threshold value at each pixel. The
+// returned pix may be an integer reduction of the binary image such that
+// the scale factor may be inferred from the ratio of the sizes, even down
+// to the extreme of a 1x1 pixel thresholds image.
+// Ideally the 8 bit threshold should be the exact threshold used to generate
+// the binary image in ThresholdToPix, but this is not a hard constraint.
+// Returns nullptr if the input is binary. PixDestroy after use.
+Pix* ImageThresholder::GetPixRectThresholds() {
+  if (IsBinary()) return nullptr;
+  Pix* pix_grey = GetPixRectGrey();
+  int width = pixGetWidth(pix_grey);
+  int height = pixGetHeight(pix_grey);
+  int* thresholds;
+  int* hi_values;
+  OtsuThreshold(pix_grey, 0, 0, width, height, &thresholds, &hi_values);
+  pixDestroy(&pix_grey);
+  Pix* pix_thresholds = pixCreate(width, height, 8);
+  int threshold = thresholds[0] > 0 ? thresholds[0] : 128;
+  pixSetAllArbitrary(pix_thresholds, threshold);
+  delete [] thresholds;
+  delete [] hi_values;
+  return pix_thresholds;
 }
 
 // Common initialization shared between SetImage methods.
@@ -180,29 +234,22 @@ void ImageThresholder::Init() {
 // the layout analysis that uses it will only be available with Leptonica,
 // so there is no raw equivalent.
 Pix* ImageThresholder::GetPixRect() {
-  if (pix_ != NULL) {
-    if (IsFullImage()) {
-      // Just clone the whole thing.
-      return pixClone(pix_);
-    } else {
-      // Crop to the given rectangle.
-      Box* box = boxCreate(rect_left_, rect_top_, rect_width_, rect_height_);
-      Pix* cropped = pixClipRectangle(pix_, box, NULL);
-      boxDestroy(&box);
-      return cropped;
-    }
+  if (IsFullImage()) {
+    // Just clone the whole thing.
+    return pixClone(pix_);
+  } else {
+    // Crop to the given rectangle.
+    Box* box = boxCreate(rect_left_, rect_top_, rect_width_, rect_height_);
+    Pix* cropped = pixClipRectangle(pix_, box, nullptr);
+    boxDestroy(&box);
+    return cropped;
   }
-  // The input is raw, so we have to make a copy of it.
-  Pix* raw_pix;
-  RawRectToPix(&raw_pix);
-  return raw_pix;
 }
 
-// Get a clone/copy of the source image rectangle, reduced to greyscale.
+// Get a clone/copy of the source image rectangle, reduced to greyscale,
+// and at the same resolution as the output binary.
 // The returned Pix must be pixDestroyed.
-// This function will be used in the future by the page layout analysis, and
-// the layout analysis that uses it will only be available with Leptonica,
-// so there is no raw equivalent.
+// Provided to the classifier to extract features from the greyscale image.
 Pix* ImageThresholder::GetPixRectGrey() {
   Pix* pix = GetPixRect();  // May have to be reduced to grey.
   int depth = pixGetDepth(pix);
@@ -215,46 +262,59 @@ Pix* ImageThresholder::GetPixRectGrey() {
   return pix;
 }
 
-// Otsu threshold the rectangle, taking everything except the image buffer
-// pointer from the class, to the output Pix.
-void ImageThresholder::OtsuThresholdRectToPix(const unsigned char* imagedata,
-                                              int bytes_per_pixel,
-                                              int bytes_per_line,
-                                              Pix** pix) const {
+// Otsu thresholds the rectangle, taking the rectangle from *this.
+void ImageThresholder::OtsuThresholdRectToPix(Pix* src_pix,
+                                              Pix** out_pix) const {
   int* thresholds;
   int* hi_values;
-  OtsuThreshold(imagedata, bytes_per_pixel, bytes_per_line,
-                rect_left_, rect_top_, rect_width_, rect_height_,
-                &thresholds, &hi_values);
 
-  // Threshold the image to the given IMAGE.
-  ThresholdRectToPix(imagedata, bytes_per_pixel, bytes_per_line,
-                     thresholds, hi_values, pix);
+  int num_channels = OtsuThreshold(src_pix, rect_left_, rect_top_, rect_width_,
+                                   rect_height_, &thresholds, &hi_values);
+  // only use opencl if compiled w/ OpenCL and selected device is opencl
+#ifdef USE_OPENCL
+  OpenclDevice od;
+  if (num_channels == 4 &&
+      od.selectedDeviceIsOpenCL() && rect_top_ == 0 && rect_left_ == 0) {
+    od.ThresholdRectToPixOCL((unsigned char*)pixGetData(src_pix), num_channels,
+                             pixGetWpl(src_pix) * 4, thresholds, hi_values,
+                             out_pix /*pix_OCL*/, rect_height_, rect_width_,
+                             rect_top_, rect_left_);
+  } else {
+#endif
+    ThresholdRectToPix(src_pix, num_channels, thresholds, hi_values, out_pix);
+#ifdef USE_OPENCL
+  }
+#endif
   delete [] thresholds;
   delete [] hi_values;
 }
 
-// Threshold the rectangle, taking everything except the image buffer pointer
-// from the class, using thresholds/hi_values to the output IMAGE.
-void ImageThresholder::ThresholdRectToPix(const unsigned char* imagedata,
-                                          int bytes_per_pixel,
-                                          int bytes_per_line,
+/// Threshold the rectangle, taking everything except the src_pix
+/// from the class, using thresholds/hi_values to the output pix.
+/// NOTE that num_channels is the size of the thresholds and hi_values
+// arrays and also the bytes per pixel in src_pix.
+void ImageThresholder::ThresholdRectToPix(Pix* src_pix,
+                                          int num_channels,
                                           const int* thresholds,
                                           const int* hi_values,
                                           Pix** pix) const {
   *pix = pixCreate(rect_width_, rect_height_, 1);
-  uinT32* pixdata = pixGetData(*pix);
+  uint32_t* pixdata = pixGetData(*pix);
   int wpl = pixGetWpl(*pix);
-  const unsigned char* srcdata = imagedata + rect_top_* bytes_per_line +
-                                 rect_left_ * bytes_per_pixel;
+  int src_wpl = pixGetWpl(src_pix);
+  uint32_t* srcdata = pixGetData(src_pix);
+  pixSetXRes(*pix, pixGetXRes(src_pix));
+  pixSetYRes(*pix, pixGetYRes(src_pix));
   for (int y = 0; y < rect_height_; ++y) {
-    const uinT8* linedata = srcdata;
-    uinT32* pixline = pixdata + y * wpl;
-    for (int x = 0; x < rect_width_; ++x, linedata += bytes_per_pixel) {
+    const uint32_t* linedata = srcdata + (y + rect_top_) * src_wpl;
+    uint32_t* pixline = pixdata + y * wpl;
+    for (int x = 0; x < rect_width_; ++x) {
       bool white_result = true;
-      for (int ch = 0; ch < bytes_per_pixel; ++ch) {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        int pixel =
+            GET_DATA_BYTE(linedata, (x + rect_left_) * num_channels + ch);
         if (hi_values[ch] >= 0 &&
-            (linedata[ch] > thresholds[ch]) == (hi_values[ch] == 0)) {
+            (pixel > thresholds[ch]) == (hi_values[ch] == 0)) {
           white_result = false;
           break;
         }
@@ -264,51 +324,7 @@ void ImageThresholder::ThresholdRectToPix(const unsigned char* imagedata,
       else
         SET_DATA_BIT(pixline, x);
     }
-    srcdata += bytes_per_line;
-  }
-}
-
-// Copy the raw image rectangle, taking all data from the class, to the Pix.
-void ImageThresholder::RawRectToPix(Pix** pix) const {
-  if (image_bytespp_ < 4) {
-    // Go via a tesseract image structure (doesn't copy the data)
-    // and use ToPix.
-    IMAGE image;
-    int bits_per_pixel = image_bytespp_ * 8;
-    if (image_bytespp_ == 0)
-      bits_per_pixel = 1;
-    image.capture(const_cast<uinT8*>(image_data_),
-                  image_width_, rect_top_ + rect_height_, bits_per_pixel);
-    if (IsFullImage()) {
-      *pix = image.ToPix();
-    } else {
-      IMAGE rect;
-      rect.create(rect_width_, rect_height_, bits_per_pixel);
-      // The capture chopped the image off at top+height, so copy
-      // the rectangle with y = 0 to get a rectangle of height
-      // starting at the bottom, since copy_sub_image uses bottom-up coords.
-      copy_sub_image(&image, rect_left_, 0, rect_width_, rect_height_,
-                     &rect, 0, 0, true);
-      *pix = rect.ToPix();
-    }
-  } else {
-    *pix = pixCreate(rect_width_, rect_height_, 32);
-    uinT32* data = pixGetData(*pix);
-    int wpl = pixGetWpl(*pix);
-    const uinT8* imagedata = image_data_ + rect_top_ * image_bytespl_ +
-                             rect_left_ * image_bytespp_;
-    for (int y = 0; y < rect_height_; ++y) {
-      const uinT8* linedata = imagedata;
-      uinT32* line = data + y * wpl;
-      for (int x = 0; x < rect_width_; ++x) {
-        line[x] = (linedata[0] << 24) | (linedata[1] << 16) |
-                  (linedata[2] << 8) | linedata[3];
-        linedata += 4;
-      }
-      imagedata += image_bytespl_;
-    }
   }
 }
 
 }  // namespace tesseract.
-

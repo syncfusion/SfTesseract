@@ -18,13 +18,13 @@
 //
 ///////////////////////////////////////////////////////////////////////
 
-#ifndef TESSERACT_TEXTORD_TEXTORD_H__
-#define TESSERACT_TEXTORD_TEXTORD_H__
+#ifndef TESSERACT_TEXTORD_TEXTORD_H_
+#define TESSERACT_TEXTORD_TEXTORD_H_
 
 #include "ccstruct.h"
+#include "bbgrid.h"
 #include "blobbox.h"
 #include "gap_map.h"
-#include "notdll.h"
 #include "publictypes.h"  // For PageSegMode.
 
 class FCOORD;
@@ -36,15 +36,54 @@ class ScrollView;
 
 namespace tesseract {
 
+// A simple class that can be used by BBGrid to hold a word and an expanded
+// bounding box that makes it easy to find words to put diacritics.
+class WordWithBox {
+ public:
+  WordWithBox() : word_(nullptr) {}
+  explicit WordWithBox(WERD *word)
+      : word_(word), bounding_box_(word->bounding_box()) {
+    int height = bounding_box_.height();
+    bounding_box_.pad(height, height);
+  }
+
+  const TBOX &bounding_box() const { return bounding_box_; }
+  // Returns the bounding box of only the good blobs.
+  TBOX true_bounding_box() const { return word_->true_bounding_box(); }
+  C_BLOB_LIST *RejBlobs() const { return word_->rej_cblob_list(); }
+  const WERD *word() const { return word_; }
+
+ private:
+  // Borrowed pointer to a real word somewhere that must outlive this class.
+  WERD *word_;
+  // Cached expanded bounding box of the word, padded all round by its height.
+  TBOX bounding_box_;
+};
+
+// Make it usable by BBGrid.
+CLISTIZEH(WordWithBox)
+using WordGrid = BBGrid<WordWithBox, WordWithBox_CLIST, WordWithBox_C_IT>;
+using WordSearch = GridSearch<WordWithBox, WordWithBox_CLIST, WordWithBox_C_IT>;
+
 class Textord {
  public:
   explicit Textord(CCStruct* ccstruct);
-  ~Textord();
+  ~Textord() = default;
 
   // Make the textlines and words inside each block.
-  void TextordPage(PageSegMode pageseg_mode,
-                   int width, int height, Pix* pix,
-                   BLOCK_LIST* blocks, TO_BLOCK_LIST* to_blocks);
+  // binary_pix is mandatory and is the binarized input after line removal.
+  // grey_pix is optional, but if present must match the binary_pix in size,
+  // and must be a *real* grey image instead of binary_pix * 255.
+  // thresholds_pix is expected to be present iff grey_pix is present and
+  // can be an integer factor reduction of the grey_pix. It represents the
+  // thresholds that were used to create the binary_pix from the grey_pix.
+  // diacritic_blobs contain small confusing components that should be added
+  // to the appropriate word(s) in case they are really diacritics.
+  void TextordPage(PageSegMode pageseg_mode, const FCOORD &reskew, int width,
+                   int height, Pix *binary_pix, Pix *thresholds_pix,
+                   Pix *grey_pix, bool use_box_bottoms,
+                   BLOBNBOX_LIST *diacritic_blobs, BLOCK_LIST *blocks,
+                   TO_BLOCK_LIST *to_blocks);
 
   // If we were supposed to return only a single textline, and there is more
   // than one, clean up and leave only the best.
@@ -70,7 +109,7 @@ class Textord {
                        );
   // tordmain.cpp ///////////////////////////////////////////
   void find_components(Pix* pix, BLOCK_LIST *blocks, TO_BLOCK_LIST *to_blocks);
-  void filter_blobs(ICOORD page_tr, TO_BLOCK_LIST *blocks, BOOL8 testing_on);
+  void filter_blobs(ICOORD page_tr, TO_BLOCK_LIST* blocks, bool testing_on);
 
  private:
   // For underlying memory management and other utilities.
@@ -90,27 +129,19 @@ class Textord {
                      const FCOORD& skew, TO_BLOCK* block,
                      ScrollView* win);
 
-  void fit_rows(float gradient, ICOORD page_tr, TO_BLOCK_LIST *blocks);
-  void cleanup_rows_fitting(ICOORD page_tr,    // top right
-                            TO_BLOCK *block,   // block to do
-                            float gradient,    // gradient to fit
-                            FCOORD rotation,   // for drawing
-                            inT32 block_edge,  // edge of block
-                            BOOL8 testing_on);  // correct orientation
+ public:
   void compute_block_xheight(TO_BLOCK *block, float gradient);
   void compute_row_xheight(TO_ROW *row,          // row to do
                            const FCOORD& rotation,
                            float gradient,       // global skew
                            int block_line_size);
-  void make_spline_rows(TO_BLOCK *block,   // block to do
+  void make_spline_rows(TO_BLOCK* block,   // block to do
                         float gradient,    // gradient to fit
-                        FCOORD rotation,   // for drawing
-                        inT32 block_edge,  // edge of block
-                        BOOL8 testing_on);
-
+                        bool testing_on);
+ private:
   //// oldbasel.cpp ////////////////////////////////////////
-  void make_old_baselines(TO_BLOCK *block,   // block to do
-                          BOOL8 testing_on,  // correct orientation
+  void make_old_baselines(TO_BLOCK* block,   // block to do
+                          bool testing_on,  // correct orientation
                           float gradient);
   void correlate_lines(TO_BLOCK *block, float gradient);
   void correlate_neighbours(TO_BLOCK *block,  // block rows are in.
@@ -125,89 +156,105 @@ class Textord {
                       QSPLINE *spline);  // starting spline
   // tospace.cpp ///////////////////////////////////////////
   //DEBUG USE ONLY
-  void block_spacing_stats(TO_BLOCK *block,
-                           GAPMAP *gapmap,
-                           BOOL8 &old_text_ord_proportional,
-                           //resulting estimate
-                           inT16 &block_space_gap_width,
-                           //resulting estimate
-                           inT16 &block_non_space_gap_width
-                           );
+  void block_spacing_stats(TO_BLOCK* block,
+                           GAPMAP* gapmap,
+                           bool& old_text_ord_proportional,
+          //resulting estimate
+                           int16_t& block_space_gap_width,
+          //resulting estimate
+                           int16_t& block_non_space_gap_width
+  );
   void row_spacing_stats(TO_ROW *row,
                          GAPMAP *gapmap,
-                         inT16 block_idx,
-                         inT16 row_idx,
+                         int16_t block_idx,
+                         int16_t row_idx,
                          //estimate for block
-                         inT16 block_space_gap_width,
+                         int16_t block_space_gap_width,
                          //estimate for block
-                         inT16 block_non_space_gap_width
+                         int16_t block_non_space_gap_width
                          );
   void old_to_method(TO_ROW *row,
                      STATS *all_gap_stats,
                      STATS *space_gap_stats,
                      STATS *small_gap_stats,
-                     inT16 block_space_gap_width,
+                     int16_t block_space_gap_width,
                      //estimate for block
-                     inT16 block_non_space_gap_width
+                     int16_t block_non_space_gap_width
                      );
-  BOOL8 isolated_row_stats(TO_ROW *row,
-                           GAPMAP *gapmap,
-                           STATS *all_gap_stats,
-                           BOOL8 suspected_table,
-                           inT16 block_idx,
-                           inT16 row_idx);
-  inT16 stats_count_under(STATS *stats, inT16 threshold);
+  bool isolated_row_stats(TO_ROW* row,
+                          GAPMAP* gapmap,
+                          STATS* all_gap_stats,
+                          bool suspected_table,
+                          int16_t block_idx,
+                          int16_t row_idx);
+  int16_t stats_count_under(STATS *stats, int16_t threshold);
   void improve_row_threshold(TO_ROW *row, STATS *all_gap_stats);
-  BOOL8 make_a_word_break(TO_ROW *row,   // row being made
-                          TBOX blob_box, // for next_blob // how many blanks?
-                          inT16 prev_gap,
-                          TBOX prev_blob_box,
-                          inT16 real_current_gap,
-                          inT16 within_xht_current_gap,
-                          TBOX next_blob_box,
-                          inT16 next_gap,
-                          uinT8 &blanks,
-                          BOOL8 &fuzzy_sp,
-                          BOOL8 &fuzzy_non,
-                          BOOL8& prev_gap_was_a_space,
-                          BOOL8& break_at_next_gap);
-  BOOL8 narrow_blob(TO_ROW *row, TBOX blob_box);
-  BOOL8 wide_blob(TO_ROW *row, TBOX blob_box);
-  BOOL8 suspected_punct_blob(TO_ROW *row, TBOX box);
+  bool make_a_word_break(TO_ROW* row,   // row being made
+                         TBOX blob_box, // for next_blob // how many blanks?
+                         int16_t prev_gap,
+                         TBOX prev_blob_box,
+                         int16_t real_current_gap,
+                         int16_t within_xht_current_gap,
+                         TBOX next_blob_box,
+                         int16_t next_gap,
+                         uint8_t& blanks,
+                         bool& fuzzy_sp,
+                         bool& fuzzy_non,
+                         bool& prev_gap_was_a_space,
+                         bool& break_at_next_gap);
+  bool narrow_blob(TO_ROW* row, TBOX blob_box);
+  bool wide_blob(TO_ROW* row, TBOX blob_box);
+  bool suspected_punct_blob(TO_ROW* row, TBOX box);
   void peek_at_next_gap(TO_ROW *row,
                         BLOBNBOX_IT box_it,
                         TBOX &next_blob_box,
-                        inT16 &next_gap,
-                        inT16 &next_within_xht_gap);
+                        int16_t &next_gap,
+                        int16_t &next_within_xht_gap);
   void mark_gap(TBOX blob,    //blob following gap
-                inT16 rule,  // heuristic id
-                inT16 prev_gap,
-                inT16 prev_blob_width,
-                inT16 current_gap,
-                inT16 next_blob_width,
-                inT16 next_gap);
+                int16_t rule,  // heuristic id
+                int16_t prev_gap,
+                int16_t prev_blob_width,
+                int16_t current_gap,
+                int16_t next_blob_width,
+                int16_t next_gap);
   float find_mean_blob_spacing(WERD *word);
-  BOOL8 ignore_big_gap(TO_ROW *row,
-                       inT32 row_length,
-                       GAPMAP *gapmap,
-                       inT16 left,
-                       inT16 right);
+  bool ignore_big_gap(TO_ROW* row,
+                      int32_t row_length,
+                      GAPMAP* gapmap,
+                      int16_t left,
+                      int16_t right);
   //get bounding box
   TBOX reduced_box_next(TO_ROW *row,     //current row
                         BLOBNBOX_IT *it  //iterator to blobds
                         );
-  TBOX reduced_box_for_blob(BLOBNBOX *blob, TO_ROW *row, inT16 *left_above_xht);
+  TBOX reduced_box_for_blob(BLOBNBOX *blob, TO_ROW *row, int16_t *left_above_xht);
   // tordmain.cpp ///////////////////////////////////////////
   float filter_noise_blobs(BLOBNBOX_LIST *src_list,
                            BLOBNBOX_LIST *noise_list,
                            BLOBNBOX_LIST *small_list,
                            BLOBNBOX_LIST *large_list);
-  void cleanup_blocks(BLOCK_LIST *blocks);
-  BOOL8 clean_noise_from_row(ROW *row);
+  // Fixes the block so it obeys all the rules:
+  // Must have at least one ROW.
+  // Must have at least one WERD.
+  // WERDs contain a fake blob.
+  void cleanup_nontext_block(BLOCK* block);
+  void cleanup_blocks(bool clean_noise, BLOCK_LIST *blocks);
+  bool clean_noise_from_row(ROW* row);
   void clean_noise_from_words(ROW *row);
   // Remove outlines that are a tiny fraction in either width or height
   // of the word height.
   void clean_small_noise_from_words(ROW *row);
+  // Groups blocks by rotation, then, for each group, makes a WordGrid and calls
+  // TransferDiacriticsToWords to copy the diacritic blobs to the most
+  // appropriate words in the group of blocks. Source blobs are not touched.
+  void TransferDiacriticsToBlockGroups(BLOBNBOX_LIST* diacritic_blobs,
+                                       BLOCK_LIST* blocks);
+  // Places a copy of blobs that are near a word (after applying rotation to the
+  // blob) in the most appropriate word, unless there is doubt, in which case a
+  // blob can end up in two words. Source blobs are not touched.
+  void TransferDiacriticsToWords(BLOBNBOX_LIST *diacritic_blobs,
+                                 const FCOORD &rotation, WordGrid *word_grid);
+
  public:
   // makerow.cpp ///////////////////////////////////////////
   BOOL_VAR_H(textord_single_height_mode, false,
@@ -239,7 +286,7 @@ class Textord {
   BOOL_VAR_H(tosp_only_small_gaps_for_kern, false, "Better guess");
   BOOL_VAR_H(tosp_all_flips_fuzzy, false, "Pass ANY flip to context?");
   BOOL_VAR_H(tosp_fuzzy_limit_all, true,
-             "Dont restrict kn->sp fuzzy limit to tables");
+             "Don't restrict kn->sp fuzzy limit to tables");
   BOOL_VAR_H(tosp_stats_use_xht_gaps, true,
              "Use within xht gap for wd breaks");
   BOOL_VAR_H(tosp_use_xht_gaps, true,
@@ -247,7 +294,7 @@ class Textord {
   BOOL_VAR_H(tosp_only_use_xht_gaps, false,
              "Only use within xht gap for wd breaks");
   BOOL_VAR_H(tosp_rule_9_test_punct, false,
-             "Dont chng kn to space next to punct");
+             "Don't chng kn to space next to punct");
   BOOL_VAR_H(tosp_flip_fuzz_kn_to_sp, true, "Default flip");
   BOOL_VAR_H(tosp_flip_fuzz_sp_to_kn, true, "Default flip");
   BOOL_VAR_H(tosp_improve_thresh, false,
@@ -303,7 +350,7 @@ class Textord {
   double_VAR_H(tosp_fuzzy_kn_fraction, 0.5, "New fuzzy kn alg");
   double_VAR_H(tosp_fuzzy_sp_fraction, 0.5, "New fuzzy sp alg");
   double_VAR_H(tosp_min_sane_kn_sp, 1.5,
-               "Dont trust spaces less than this time kn");
+               "Don't trust spaces less than this time kn");
   double_VAR_H(tosp_init_guess_kn_mult, 2.2,
                "Thresh guess - mult kn by this");
   double_VAR_H(tosp_init_guess_xht_mult, 0.28,
@@ -311,15 +358,15 @@ class Textord {
   double_VAR_H(tosp_max_sane_kn_thresh, 5.0,
                "Multiplier on kn to limit thresh");
   double_VAR_H(tosp_flip_caution, 0.0,
-               "Dont autoflip kn to sp when large separation");
+               "Don't autoflip kn to sp when large separation");
   double_VAR_H(tosp_large_kerning, 0.19,
                "Limit use of xht gap with large kns");
   double_VAR_H(tosp_dont_fool_with_small_kerns, -1,
                "Limit use of xht gap with odd small kns");
   double_VAR_H(tosp_near_lh_edge, 0,
-               "Dont reduce box if the top left is non blank");
+               "Don't reduce box if the top left is non blank");
   double_VAR_H(tosp_silly_kn_sp_gap, 0.2,
-               "Dont let sp minus kn get too small");
+               "Don't let sp minus kn get too small");
   double_VAR_H(tosp_pass_wide_fuzz_sp_to_context, 0.75,
                "How wide fuzzies need context");
   // tordmain.cpp ///////////////////////////////////////////
@@ -327,10 +374,9 @@ class Textord {
   BOOL_VAR_H(textord_show_blobs, false, "Display unsorted blobs");
   BOOL_VAR_H(textord_show_boxes, false, "Display boxes");
   INT_VAR_H(textord_max_noise_size, 7, "Pixel size of noise");
-  double_VAR_H(textord_blob_size_bigile, 95, "Percentile for large blobs");
+  INT_VAR_H(textord_baseline_debug, 0, "Baseline debug level");
   double_VAR_H(textord_noise_area_ratio, 0.7,
                "Fraction of bounding box for noise");
-  double_VAR_H(textord_blob_size_smallile, 20, "Percentile for small blobs");
   double_VAR_H(textord_initialx_ile, 0.75, "Ile of sizes for xheight guess");
   double_VAR_H(textord_initialasc_ile, 0.90, "Ile of sizes for xheight guess");
   INT_VAR_H(textord_noise_sizefraction, 10, "Fraction of size for maxima");
@@ -346,10 +392,10 @@ class Textord {
                "Height fraction to discard outlines as speckle noise");
   INT_VAR_H(textord_noise_sncount, 1, "super norm blobs to save row");
   double_VAR_H(textord_noise_rowratio, 6.0, "Dot to norm ratio for deletion");
-  BOOL_VAR_H(textord_noise_debug, FALSE, "Debug row garbage detector");
+  BOOL_VAR_H(textord_noise_debug, false, "Debug row garbage detector");
   double_VAR_H(textord_blshift_maxshift, 0.00, "Max baseline shift");
   double_VAR_H(textord_blshift_xfraction, 9.99, "Min size of baseline shift");
 };
 }  // namespace tesseract.
 
-#endif  // TESSERACT_TEXTORD_TEXTORD_H__
+#endif  // TESSERACT_TEXTORD_TEXTORD_H_

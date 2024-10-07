@@ -20,7 +20,7 @@
 #ifndef TESSERACT_CCUTIL_SORTHELPER_H_
 #define TESSERACT_CCUTIL_SORTHELPER_H_
 
-#include <stdlib.h>
+#include <cstdlib>
 #include "genericvector.h"
 
 // Generic class to provide functions based on a <value,count> pair.
@@ -42,21 +42,23 @@ class SortHelper {
   };
   // qsort function to sort by decreasing count.
   static int SortPairsByCount(const void* v1, const void* v2) {
-    const SortPair<T>* p1 = reinterpret_cast<const SortPair<T>*>(v1);
-    const SortPair<T>* p2 = reinterpret_cast<const SortPair<T>*>(v2);
+    const auto* p1 = static_cast<const SortPair<T>*>(v1);
+    const auto* p2 = static_cast<const SortPair<T>*>(v2);
     return p2->count - p1->count;
   }
   // qsort function to sort by decreasing value.
   static int SortPairsByValue(const void* v1, const void* v2) {
-    const SortPair<T>* p1 = reinterpret_cast<const SortPair<T>*>(v1);
-    const SortPair<T>* p2 = reinterpret_cast<const SortPair<T>*>(v2);
+    const auto* p1 = static_cast<const SortPair<T>*>(v1);
+    const auto* p2 = static_cast<const SortPair<T>*>(v2);
     if (p2->value - p1->value < 0) return -1;
     if (p2->value - p1->value > 0) return 1;
     return 0;
   }
 
   // Constructor takes a hint of the array size, but it need not be accurate.
-  explicit SortHelper(int sizehint) : counts_(sizehint) {}
+  explicit SortHelper(int sizehint) {
+    counts_.reserve(sizehint);
+  }
 
   // Add a value that may be a duplicate of an existing value.
   // Uses a linear search.
@@ -73,14 +75,14 @@ class SortHelper {
   }
 
   // Returns the frequency of the most frequent value.
-  // If max_value is not NULL, returns the most frequent value.
-  // If the array is empty, returns -MAX_INT32 and max_value is unchanged.
+  // If max_value is not nullptr, returns the most frequent value.
+  // If the array is empty, returns -INT32_MAX and max_value is unchanged.
   int MaxCount(T* max_value) const {
-    int best_count = -MAX_INT32;
+    int best_count = -INT32_MAX;
     for (int i = 0; i < counts_.size(); ++i) {
       if (counts_[i].count > best_count) {
         best_count = counts_[i].count;
-        if (max_value != NULL)
+        if (max_value != nullptr)
           *max_value = counts_[i].value;
       }
     }

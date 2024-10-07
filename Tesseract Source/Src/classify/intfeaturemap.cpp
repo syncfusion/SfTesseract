@@ -30,13 +30,12 @@
 namespace tesseract {
 
 const int kMaxOffsetDist = 32;
-const double kMinPCLengthIncrease = 1.0 / 1024;
 
 IntFeatureMap::IntFeatureMap()
   : mapping_changed_(true), compact_size_(0) {
   for (int dir = 0; dir < kNumOffsetMaps; ++dir) {
-    offset_plus_[dir] = NULL;
-    offset_minus_[dir] = NULL;
+    offset_plus_[dir] = nullptr;
+    offset_minus_[dir] = nullptr;
   }
 }
 
@@ -182,8 +181,8 @@ void IntFeatureMap::Clear() {
   for (int dir = 0; dir < kNumOffsetMaps; ++dir) {
     delete [] offset_plus_[dir];
     delete [] offset_minus_[dir];
-    offset_plus_[dir] = NULL;
-    offset_minus_[dir] = NULL;
+    offset_plus_[dir] = nullptr;
+    offset_minus_[dir] = nullptr;
   }
 }
 
@@ -214,7 +213,7 @@ int IntFeatureMap::ComputeOffsetFeature(int index_feature, int dir) const {
       double y_pos = f.Y + feature_dir.y() * (m * dir);
       int x = IntCastRounded(x_pos);
       int y = IntCastRounded(y_pos);
-      if (x >= 0 && x <= MAX_UINT8 && y >= 0 && y <= MAX_UINT8) {
+      if (x >= 0 && x <= UINT8_MAX && y >= 0 && y <= UINT8_MAX) {
         INT_FEATURE_STRUCT offset_f;
         offset_f.X = x;
         offset_f.Y = y;

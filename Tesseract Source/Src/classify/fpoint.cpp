@@ -1,10 +1,9 @@
 /******************************************************************************
- **	Filename:    fpoint.c
- **	Purpose:     Abstract data type for a 2D point (floating point coords)
- **	Author:      Dan Johnson
- **	History:     Thu Apr 12 10:44:15 1990, DSJ, Created.
+ ** Filename:    fpoint.cpp
+ ** Purpose:     Abstract data type for a 2D point (floating point coords)
+ ** Author:      Dan Johnson
  **
- **	(c) Copyright Hewlett-Packard Company, 1988.
+ ** (c) Copyright Hewlett-Packard Company, 1988.
  ** Licensed under the Apache License, Version 2.0 (the "License");
  ** you may not use this file except in compliance with the License.
  ** You may obtain a copy of the License at
@@ -15,51 +14,41 @@
  ** See the License for the specific language governing permissions and
  ** limitations under the License.
  ******************************************************************************/
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
           Include Files and Type Defines
-----------------------------------------------------------------------------**/
-#include "const.h"
+----------------------------------------------------------------------------*/
+#define _USE_MATH_DEFINES       // for M_PI
 #include "fpoint.h"
-#include <stdio.h>
-#include <math.h>
+#include <cstdio>
+#include <cmath>                // for M_PI
 
-/**----------------------------------------------------------------------------
+/*----------------------------------------------------------------------------
               Public Code
-----------------------------------------------------------------------------**/
-/*---------------------------------------------------------------------------*/
+----------------------------------------------------------------------------*/
 
-FLOAT32 DistanceBetween(FPOINT A, FPOINT B) {
-  double xd = XDelta(A, B);
-  double yd = YDelta(A, B);
+float DistanceBetween(FPOINT A, FPOINT B) {
+  const double xd = XDelta(A, B);
+  const double yd = YDelta(A, B);
   return sqrt(static_cast<double>(xd * xd + yd * yd));
 }
 
-
-
-FLOAT32 NormalizedAngleFrom(FPOINT *Point1,
-                            FPOINT *Point2,
-                            FLOAT32 FullScale) {
-/*
- **	Parameters:
- **		Point1, Point2	points to compute angle between
- **		FullScale	value to associate with 2*pi
- **	Globals: none
- **	Operation: Return the angle from Point1 to Point2 normalized to
- **		lie in the range 0 to FullScale (where FullScale corresponds
- **		to 2*pi or 360 degrees).
- **	Return: none
- **	Exceptions: none
- **	History: Wed Mar 28 14:27:25 1990, DSJ, Created.
+/**
+ * Return the angle from Point1 to Point2 normalized to
+ * lie in the range 0 to FullScale (where FullScale corresponds
+ * to 2*pi or 360 degrees).
+ * @param Point1 points to compute angle between
+ * @param Point2 points to compute angle between
+ * @param FullScale value to associate with 2*pi
+ * @return angle
  */
-  FLOAT32 Angle;
-  FLOAT32 NumRadsInCircle = 2.0 * PI;
+float NormalizedAngleFrom(FPOINT *Point1, FPOINT *Point2, float FullScale) {
+  float NumRadsInCircle = 2.0 * M_PI;
 
-  Angle = AngleFrom (*Point1, *Point2);
+  float Angle = AngleFrom (*Point1, *Point2);
   if (Angle < 0.0)
     Angle += NumRadsInCircle;
   Angle *= FullScale / NumRadsInCircle;
   if (Angle < 0.0 || Angle >= FullScale)
     Angle = 0.0;
   return (Angle);
-
-}                                /* NormalizedAngleFrom */
+}

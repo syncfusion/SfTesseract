@@ -1,8 +1,7 @@
 /**********************************************************************
  * File:        sortflts.cpp  (Formerly sfloats.c)
  * Description: Code to maintain a sorted list of floats.
- * Author:		Ray Smith
- * Created:		Mon Oct  4 16:15:40 BST 1993
+ * Author:      Ray Smith
  *
  * (C) Copyright 1993, Hewlett-Packard Ltd.
  ** Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,20 +16,18 @@
  *
  **********************************************************************/
 
-#include "mfcpch.h"
 #include          "sortflts.h"
-#include          "notdll.h"
 
 ELISTIZE (SORTED_FLOAT)
 /**
  * @name SORTED_FLOATS::add
  *
- * Add a new entry to the sorted lsit of floats.
+ * Add a new entry to the sorted list of floats.
  */
 void SORTED_FLOATS::add(  //add new entry
                         float value,
-                        inT32 key) {
-  SORTED_FLOAT *new_float = new SORTED_FLOAT (value, key);
+                        int32_t key) {
+  auto *new_float = new SORTED_FLOAT (value, key);
 
   if (list.empty ())
     it.add_after_stay_put (new_float);
@@ -49,11 +46,11 @@ void SORTED_FLOATS::add(  //add new entry
 /**
  * @name SORTED_FLOATS::remove
  *
- * Remove an entry from the sorted lsit of floats.
+ * Remove an entry from the sorted list of floats.
  */
 
 void SORTED_FLOATS::remove(  //remove the entry
-                           inT32 key) {
+                           int32_t key) {
   if (!list.empty ()) {
     for (it.mark_cycle_pt (); !it.cycled_list (); it.forward ()) {
       if (it.data ()->address == key) {
@@ -73,7 +70,7 @@ void SORTED_FLOATS::remove(  //remove the entry
 
 float
 SORTED_FLOATS::operator[] (      //get an entry
-inT32 index                      //to list
+int32_t index                      //to list
 ) {
   it.move_to_first ();
   return it.data_relative (index)->entry;
